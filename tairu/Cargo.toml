@@ -1,0 +1,15 @@
+[package]
+name = "tairu"
+description = "3D Tiles 1.0/1.1 data model"
+edition = "2024"
+version = "0.1.0"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+url = "2"
+glam = { version = "0.33", features = ["serde"] }

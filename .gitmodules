@@ -1,0 +1,4 @@
+[submodule "extern/3d-tiles"]
+	path = extern/3d-tiles
+	url = https://github.com/CesiumGS/3d-tiles.git
+	branch = main

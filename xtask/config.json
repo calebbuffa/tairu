@@ -1,0 +1,163 @@
+{
+    "classes": {
+        "3D Tiles property": {
+            "skip": true
+        },
+        "Root Property": {
+            "skip": true
+        },
+        "Any value": {
+            "skip": true
+        },
+        "Numeric value": {
+            "skip": true
+        },
+        "No data value": {
+            "skip": true
+        },
+        "Tileset": {
+            "overrideName": "Tileset"
+        },
+        "Tile": {
+            "overrideName": "Tile",
+            "propertyOverrides": {
+                "refine": "Option<Refine>",
+                "transform": "[f64; 16]"
+            },
+            "propertyDefaults": {
+                "transform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+            }
+        },
+        "Implicit tiling": {
+            "overrideName": "ImplicitTiling",
+            "propertyOverrides": {
+                "subdivisionScheme": "SubdivisionScheme"
+            }
+        },
+        "Bounding Volume": {
+            "overrideName": "BoundingVolume",
+            "propertyOverrides": {
+                "box": "[f64; 12]",
+                "region": "[f64; 6]",
+                "sphere": "[f64; 4]"
+            }
+        },
+        "bounding volume": {
+            "overrideName": "BoundingVolume"
+        },
+        "content": {
+            "overrideName": "TileContent"
+        },
+        "group": {
+            "overrideName": "TileGroup"
+        },
+        "Group Metadata": {
+            "overrideName": "Group"
+        },
+        "Buffer View": {
+            "overrideName": "BufferView"
+        },
+        "asset": {
+            "overrideName": "TilesetAsset"
+        },
+        "properties": {
+            "overrideName": "TileProperties"
+        },
+        "statistics": {
+            "overrideName": "TilesetStatistics"
+        },
+        "schema": {
+            "overrideName": "Schema"
+        },
+        "class": {
+            "overrideName": "Class"
+        },
+        "class property": {
+            "overrideName": "ClassProperty"
+        },
+        "enum": {
+            "overrideName": "Enum"
+        },
+        "enum value": {
+            "overrideName": "EnumValue"
+        },
+        "property table": {
+            "overrideName": "PropertyTable"
+        },
+        "property table property": {
+            "overrideName": "PropertyTableProperty"
+        },
+        "property texture": {
+            "overrideName": "PropertyTexture"
+        },
+        "property texture property": {
+            "overrideName": "PropertyTextureProperty"
+        },
+        "property attribute": {
+            "overrideName": "PropertyAttribute"
+        },
+        "property attribute property": {
+            "overrideName": "PropertyAttributeProperty"
+        },
+        "metadata entity": {
+            "overrideName": "MetadataEntity"
+        },
+        "subtree": {
+            "overrideName": "Subtree"
+        },
+        "Subtree": {
+            "overrideName": "Subtree",
+            "allowEmptyArrays": true
+        },
+        "availability": {
+            "overrideName": "Availability"
+        },
+        "buffer": {
+            "overrideName": "Buffer",
+            "extraFields": [
+                {
+                    "name": "data",
+                    "rustType": "Vec<u8>",
+                    "defaultExpr": "Vec::new()",
+                    "skipSerde": true
+                }
+            ]
+        },
+        "Buffer": {
+            "overrideName": "Buffer",
+            "extraFields": [
+                {
+                    "name": "data",
+                    "rustType": "Vec<u8>",
+                    "defaultExpr": "Vec::new()",
+                    "skipSerde": true
+                }
+            ]
+        },
+        "bufferView": {
+            "overrideName": "SubtreeBufferView"
+        },
+        "implicit tiling": {
+            "overrideName": "ImplicitTiling"
+        },
+        "bounding volume S2": {
+            "overrideName": "BoundingVolumeS2"
+        }
+    },
+    "additionalSchemas": [
+        "Subtree/subtree.schema.json",
+        "Subtree/availability.schema.json",
+        "Subtree/buffer.schema.json",
+        "Subtree/bufferView.schema.json"
+    ],
+    "customTypes": {
+        "Refine": {
+            "kind": "enum",
+            "variants": ["ADD", "REPLACE"]
+        },
+        "SubdivisionScheme": {
+            "kind": "enum",
+            "variants": ["Quadtree", "Octree", "S2"]
+        }
+    }
+}
