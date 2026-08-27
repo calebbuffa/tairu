@@ -2,9 +2,7 @@
 name = "xtask"
 version = "0.1.0"
 edition = "2024"
-license.workspace = true
 description = "3D Tiles schema -> Rust code generator"
-repository.workspace = true
 publish = false
 
 [[bin]]

@@ -155,7 +155,9 @@ fn render_generated_extension_impls_from_module(module_src: &str) -> String {
             }
             continue;
         }
-        if trimmed.starts_with("pub extensions: std::collections::HashMap<String, serde_json::Value>,") {
+        if trimmed
+            .starts_with("pub extensions: std::collections::HashMap<String, serde_json::Value>,")
+        {
             if let Some(name) = &current_struct {
                 names.push(name.clone());
             }
@@ -165,9 +167,13 @@ fn render_generated_extension_impls_from_module(module_src: &str) -> String {
     names.dedup();
 
     let mut out = String::new();
-    out.push_str("\n// ---------------------------------------------------------------------------\n");
+    out.push_str(
+        "\n// ---------------------------------------------------------------------------\n",
+    );
     out.push_str("// Generated typed extension bindings\n");
-    out.push_str("// ---------------------------------------------------------------------------\n\n");
+    out.push_str(
+        "// ---------------------------------------------------------------------------\n\n",
+    );
     for name in names {
         out.push_str("impl crate::extensions::HasExtensions for ");
         out.push_str(&name);
