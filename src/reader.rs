@@ -2,7 +2,7 @@
 //! bounded-memory streaming fold.
 
 use crate::ext_mesh_features;
-use crate::resource::UriLoadError;
+use crate::uri::UriLoadError;
 use crate::{Content, Tile, Tileset};
 use serde::de::{DeserializeSeed, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde_json::Value as JsonValue;

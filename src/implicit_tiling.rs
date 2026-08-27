@@ -187,15 +187,7 @@ fn expand_tile_url(template: &str, vars: &[(&str, &str)]) -> String {
 }
 
 pub fn resolve_url(base: &str, path: &str) -> String {
-    if path.contains("://") {
-        return path.to_string();
-    }
-    let base_dir = base.rfind('/').map(|i| &base[..i]).unwrap_or(base);
-    format!(
-        "{}/{}",
-        base_dir.trim_end_matches('/'),
-        path.trim_start_matches('/')
-    )
+    crate::uri::resolve_uri(base, path)
 }
 #[cfg(test)]
 mod tests {

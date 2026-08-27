@@ -9,10 +9,10 @@ mod implicit_tiling;
 mod impls;
 mod metadata_query;
 mod reader;
-mod resource;
 mod subtree;
 mod tile;
 mod traversal;
+mod uri;
 mod writer;
 
 pub use generated::*;
@@ -32,15 +32,15 @@ pub use metadata_query::{FoundMetadataProperty, MetadataQuery};
 pub use reader::{
     TileParseError, fold_from_reader, from_reader, from_slice, from_str, load, load_async,
 };
-pub use resource::{is_external_tileset_uri, resolve_uri};
 pub use subtree::{SubtreeParseError, parse_subtree, parse_subtree_with_buffers};
 pub use tile::TileFormat;
 pub use traversal::{TileVisit, TraversalControl, walk};
+pub use uri::{Uri, is_external_tileset_uri, resolve_uri};
 pub use writer::{
     SchemaWriter, SchemaWriterResult, SubtreeWriter, SubtreeWriterResult, TilesetWriter,
     TilesetWriterResult, WriteOptions,
 };
 
 // Legacy error types for backward compatibility during transition
-pub use resource::UriLoadError;
 pub use traversal::WalkError;
+pub use uri::UriLoadError;

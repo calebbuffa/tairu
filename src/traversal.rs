@@ -6,8 +6,8 @@ use crate::availability::{
 use crate::generated::{BoundingVolume, Content, SubdivisionScheme, Tile};
 use crate::reader::TileParseError;
 use crate::reader::from_slice;
-use crate::resource::{is_external_tileset_uri, resolve_uri};
 use crate::subtree::parse_subtree;
+use crate::uri::{is_external_tileset_uri, resolve_uri};
 use std::collections::HashSet;
 
 /// Column-major 4x4 matrix in 64.

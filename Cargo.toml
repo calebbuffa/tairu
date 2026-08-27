@@ -16,4 +16,5 @@ serde_json = "1"
 log = "0.4"
 thiserror = "2"
 url = "2"
+typed-path = "0.12"
 glam = { version = "0.33", features = ["serde"] }

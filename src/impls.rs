@@ -5,7 +5,7 @@
 //! generated structs without any trait import.
 
 use crate::generated::{Content, Tile, Tileset};
-use crate::resource::is_external_tileset_uri;
+use crate::uri::is_external_tileset_uri;
 
 impl Tile {
     /// Iterate every tile in the subtree rooted at `self` (depth-first,
