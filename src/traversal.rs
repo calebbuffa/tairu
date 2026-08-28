@@ -7,7 +7,7 @@ use crate::generated::{BoundingVolume, Content, SubdivisionScheme, Tile};
 use crate::reader::TileParseError;
 use crate::reader::from_slice;
 use crate::subtree::parse_subtree;
-use crate::uri::{is_external_tileset_uri, resolve_uri};
+use crate::uri::{Uri, is_external_tileset_uri};
 use std::collections::HashSet;
 
 /// Column-major 4x4 matrix in 64.
@@ -75,7 +75,7 @@ pub enum WalkError<E: std::error::Error + 'static> {
 /// may be replaced before descendants are expanded.
 pub struct TileVisit<'a> {
     pub tile: &'a Tile,
-    pub source_uri: &'a str,
+    pub source_uri: &'a Uri,
     pub depth: usize,
     pub is_external_root: bool,
     pub parent_transform: Mat4d,
@@ -113,26 +113,26 @@ fn external_uris(tile: &Tile) -> impl Iterator<Item = &str> {
 /// The fetch closure receives resolved resource URIs. The visitor receives
 /// each complete source tile before its descendants are expanded.
 pub fn walk<F, V, E>(
-    root_uri: impl Into<String>,
+    root_uri: impl Into<Uri>,
     fetch: &mut F,
     mut visit: V,
 ) -> Result<(), WalkError<E>>
 where
-    F: FnMut(&str) -> Result<Vec<u8>, E>,
+    F: FnMut(&Uri) -> Result<Vec<u8>, E>,
     V: FnMut(&mut TileVisit<'_>) -> Result<TraversalControl, E>,
     E: std::error::Error + 'static,
 {
     let root_uri = root_uri.into();
     let bytes = fetch(&root_uri).map_err(|source| WalkError::Fetch {
-        uri: root_uri.clone(),
+        uri: root_uri.to_string(),
         source,
     })?;
     let tileset = from_slice(&bytes).map_err(|source| WalkError::Parse {
-        uri: root_uri.clone(),
+        uri: root_uri.to_string(),
         source,
     })?;
     let mut active_sources = HashSet::new();
-    active_sources.insert(root_uri.clone());
+    active_sources.insert(root_uri.to_string());
     walk_tile(
         &tileset.root,
         &root_uri,
@@ -147,7 +147,7 @@ where
 
 fn walk_tile<F, V, E>(
     tile: &Tile,
-    source_uri: &str,
+    source_uri: &Uri,
     parent_transform: Mat4d,
     depth: usize,
     is_external_root: bool,
@@ -156,7 +156,7 @@ fn walk_tile<F, V, E>(
     visit: &mut V,
 ) -> Result<(), WalkError<E>>
 where
-    F: FnMut(&str) -> Result<Vec<u8>, E>,
+    F: FnMut(&Uri) -> Result<Vec<u8>, E>,
     V: FnMut(&mut TileVisit<'_>) -> Result<TraversalControl, E>,
     E: std::error::Error + 'static,
 {
@@ -203,17 +203,18 @@ where
     }
 
     for relative_uri in external_uris(tile) {
-        let resolved_uri = resolve_uri(source_uri, relative_uri);
-        if !active_sources.insert(resolved_uri.clone()) {
-            return Err(WalkError::ExternalCycle { uri: resolved_uri });
+        let resolved_uri = source_uri.resolve(relative_uri);
+        let resolved_key = resolved_uri.to_string();
+        if !active_sources.insert(resolved_key.clone()) {
+            return Err(WalkError::ExternalCycle { uri: resolved_key });
         }
         let result = (|| {
             let bytes = fetch(&resolved_uri).map_err(|source| WalkError::Fetch {
-                uri: resolved_uri.clone(),
+                uri: resolved_key.clone(),
                 source,
             })?;
             let tileset = from_slice(&bytes).map_err(|source| WalkError::Parse {
-                uri: resolved_uri.clone(),
+                uri: resolved_key.clone(),
                 source,
             })?;
             walk_tile(
@@ -227,7 +228,7 @@ where
                 visit,
             )
         })();
-        active_sources.remove(&resolved_uri);
+        active_sources.remove(&resolved_key);
         result?;
     }
     Ok(())
@@ -236,7 +237,7 @@ where
 fn walk_implicit_tile<F, V, E>(
     tile: &Tile,
     implicit: &crate::generated::ImplicitTiling,
-    source_uri: &str,
+    source_uri: &Uri,
     world_transform: Mat4d,
     depth: usize,
     _active_sources: &mut HashSet<String>,
@@ -244,7 +245,7 @@ fn walk_implicit_tile<F, V, E>(
     visit: &mut V,
 ) -> Result<(), WalkError<E>>
 where
-    F: FnMut(&str) -> Result<Vec<u8>, E>,
+    F: FnMut(&Uri) -> Result<Vec<u8>, E>,
     V: FnMut(&mut TileVisit<'_>) -> Result<TraversalControl, E>,
     E: std::error::Error + 'static,
 {
@@ -261,7 +262,7 @@ where
         SubdivisionScheme::Quadtree => {
             let mut expander = ImplicitQuadtreeExpander::new(
                 tile.bounding_volume.clone(),
-                source_uri.to_string(),
+                source_uri.clone(),
                 content_template,
                 subtree_template,
                 implicit.subtree_levels as u32,
@@ -282,12 +283,15 @@ where
                             .subtree_root(expander.subtree_levels)
                             .resolve_url(source_uri, &expander.subtree_uri_template);
                         let bytes = fetch(&uri).map_err(|source| WalkError::Fetch {
-                            uri: uri.clone(),
+                            uri: uri.to_string(),
                             source,
                         })?;
                         expander
                             .register_subtree(node.id.subtree_root(expander.subtree_levels), &bytes)
-                            .map_err(|source| WalkError::Parse { uri, source })?;
+                            .map_err(|source| WalkError::Parse {
+                                uri: uri.to_string(),
+                                source,
+                            })?;
                         stack.push(node);
                     }
                     ExpansionResult::Ready(children) => {
@@ -326,7 +330,7 @@ where
         SubdivisionScheme::Octree => {
             let mut expander = ImplicitOctreeExpander::new(
                 tile.bounding_volume.clone(),
-                source_uri.to_string(),
+                source_uri.clone(),
                 content_template,
                 subtree_template,
                 implicit.subtree_levels as u32,
@@ -347,12 +351,15 @@ where
                             .subtree_root(expander.subtree_levels)
                             .resolve_url(source_uri, &expander.subtree_uri_template);
                         let bytes = fetch(&uri).map_err(|source| WalkError::Fetch {
-                            uri: uri.clone(),
+                            uri: uri.to_string(),
                             source,
                         })?;
                         expander
                             .register_subtree(node.id.subtree_root(expander.subtree_levels), &bytes)
-                            .map_err(|source| WalkError::Parse { uri, source })?;
+                            .map_err(|source| WalkError::Parse {
+                                uri: uri.to_string(),
+                                source,
+                            })?;
                         stack.push(node);
                     }
                     ExpansionResult::Ready(children) => {
@@ -404,7 +411,7 @@ pub struct ImplicitQuadtileNode {
 
 pub struct ImplicitQuadtreeExpander {
     root_bounding_volume: BoundingVolume,
-    source_uri: String,
+    source_uri: Uri,
     content_uri_template: String,
     subtree_uri_template: String,
     subtree_levels: u32,
@@ -415,7 +422,7 @@ pub struct ImplicitQuadtreeExpander {
 impl ImplicitQuadtreeExpander {
     pub fn new(
         root_bounding_volume: BoundingVolume,
-        source_uri: String,
+        source_uri: Uri,
         content_uri_template: String,
         subtree_uri_template: String,
         subtree_levels: u32,
@@ -460,7 +467,11 @@ impl ImplicitQuadtreeExpander {
                     geometric_error: node.geometric_error * 0.5,
                     world_transform: node.world_transform,
                     content_uri: if child_flags.contains(TileAvailabilityFlags::CONTENT_AVAILABLE) {
-                        Some(child_id.resolve_url(&self.source_uri, &self.content_uri_template))
+                        Some(
+                            child_id
+                                .resolve_url(&self.source_uri, &self.content_uri_template)
+                                .to_string(),
+                        )
                     } else {
                         None
                     },
@@ -493,7 +504,7 @@ pub struct ImplicitOctreeNode {
 
 pub struct ImplicitOctreeExpander {
     root_bounding_volume: BoundingVolume,
-    source_uri: String,
+    source_uri: Uri,
     content_uri_template: String,
     subtree_uri_template: String,
     subtree_levels: u32,
@@ -504,7 +515,7 @@ pub struct ImplicitOctreeExpander {
 impl ImplicitOctreeExpander {
     pub fn new(
         root_bounding_volume: BoundingVolume,
-        source_uri: String,
+        source_uri: Uri,
         content_uri_template: String,
         subtree_uri_template: String,
         subtree_levels: u32,
@@ -549,7 +560,11 @@ impl ImplicitOctreeExpander {
                     geometric_error: node.geometric_error * 0.5,
                     world_transform: node.world_transform,
                     content_uri: if child_flags.contains(TileAvailabilityFlags::CONTENT_AVAILABLE) {
-                        Some(child_id.resolve_url(&self.source_uri, &self.content_uri_template))
+                        Some(
+                            child_id
+                                .resolve_url(&self.source_uri, &self.content_uri_template)
+                                .to_string(),
+                        )
                     } else {
                         None
                     },
@@ -601,10 +616,11 @@ mod tests {
     fn walk_uses_identity_for_omitted_transforms() {
         let bytes = tileset_with_root(root(serde_json::json!([])));
         let mut resources = HashMap::from([(String::from("memory://root.json"), bytes)]);
-        let mut fetch = |uri: &str| {
+        let mut fetch = |uri: &Uri| {
+            let key = uri.to_string();
             resources
-                .remove(uri)
-                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, uri.to_string()))
+                .remove(&key)
+                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, key))
         };
         let mut visited = 0;
 
@@ -633,10 +649,11 @@ mod tests {
             (String::from("memory://root.json"), root_bytes),
             (String::from(external_uri), nested_bytes),
         ]);
-        let mut fetch = |uri: &str| {
+        let mut fetch = |uri: &Uri| {
+            let key = uri.to_string();
             resources
-                .remove(uri)
-                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, uri.to_string()))
+                .remove(&key)
+                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, key))
         };
         let mut external_parent = None;
 

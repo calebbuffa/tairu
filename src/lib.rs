@@ -27,7 +27,6 @@ pub use availability::{
 pub use esri_crs::{EsriCrs, EsriCrsTransform};
 pub use ext_mesh_features::{EXTENSION_NAME as EXT_MESH_FEATURES_NAME, ExtMeshFeatures, FeatureId};
 pub use extensions::{Extension, HasExtensions};
-pub use implicit_tiling::*;
 pub use metadata_query::{FoundMetadataProperty, MetadataQuery};
 pub use reader::{
     TileParseError, fold_from_reader, from_reader, from_slice, from_str, load, load_async,

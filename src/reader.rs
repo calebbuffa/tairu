@@ -2,7 +2,7 @@
 //! bounded-memory streaming fold.
 
 use crate::ext_mesh_features;
-use crate::uri::UriLoadError;
+use crate::uri::{Uri, UriLoadError};
 use crate::{Content, Tile, Tileset};
 use serde::de::{DeserializeSeed, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde_json::Value as JsonValue;
@@ -46,35 +46,41 @@ pub trait TilesetFold {
 }
 
 /// Fetches and parses a tileset through a caller-owned closure.
-pub fn load<F, E>(uri: impl Into<String>, fetch: &mut F) -> Result<Tileset, UriLoadError<E>>
+pub fn load<F, E>(uri: impl Into<Uri>, fetch: &mut F) -> Result<Tileset, UriLoadError<E>>
 where
-    F: FnMut(&str) -> Result<Vec<u8>, E>,
+    F: FnMut(&Uri) -> Result<Vec<u8>, E>,
     E: std::error::Error + 'static,
 {
     let uri = uri.into();
     let bytes = fetch(&uri).map_err(|source| UriLoadError::Fetch {
-        uri: uri.clone(),
+        uri: uri.to_string(),
         source,
     })?;
-    from_slice(&bytes).map_err(|source| UriLoadError::Parse { uri, source })
+    from_slice(&bytes).map_err(|source| UriLoadError::Parse {
+        uri: uri.to_string(),
+        source,
+    })
 }
 
 /// Asynchronously fetches and parses a tileset through a caller-owned closure.
 pub async fn load_async<F, Fut, E>(
-    uri: impl Into<String>,
+    uri: impl Into<Uri>,
     fetch: &mut F,
 ) -> Result<Tileset, UriLoadError<E>>
 where
-    F: FnMut(&str) -> Fut,
+    F: FnMut(&Uri) -> Fut,
     Fut: Future<Output = Result<Vec<u8>, E>>,
     E: std::error::Error + 'static,
 {
     let uri = uri.into();
     let bytes = fetch(&uri).await.map_err(|source| UriLoadError::Fetch {
-        uri: uri.clone(),
+        uri: uri.to_string(),
         source,
     })?;
-    from_slice(&bytes).map_err(|source| UriLoadError::Parse { uri, source })
+    from_slice(&bytes).map_err(|source| UriLoadError::Parse {
+        uri: uri.to_string(),
+        source,
+    })
 }
 
 /// Parses and validates a tileset from a raw JSON byte slice.
@@ -583,7 +589,7 @@ mod tests {
     #[test]
     fn uri_loading_fetches_the_requested_uri() {
         let mut requested = None;
-        let mut fetch = |uri: &str| -> Result<Vec<u8>, std::io::Error> {
+        let mut fetch = |uri: &Uri| -> Result<Vec<u8>, std::io::Error> {
             requested = Some(uri.to_string());
             Ok(minimal_json().to_vec())
         };

@@ -159,11 +159,6 @@ impl Uri {
         }
     }
 
-    /// Returns the file extension, including the leading `.`, if any.
-    ///
-    /// A trailing dot with nothing after it (e.g. `test.`) still counts as
-    /// an extension consisting of just `.`, matching `getExtension()` in
-    /// cesium-native's `CesiumUtility::Uri`.
     pub fn extension(&self) -> Option<&str> {
         match self {
             Uri::Url(_) => {
@@ -221,13 +216,29 @@ impl std::fmt::Display for Uri {
     }
 }
 
+// Parsing is infallible (an unrecognized string always falls back to a
+// path), so `From` rather than `TryFrom` is the right conversion here.
+impl From<&str> for Uri {
+    fn from(s: &str) -> Self {
+        Uri::parse(s)
+    }
+}
+
+impl From<String> for Uri {
+    fn from(s: String) -> Self {
+        Uri::parse(&s)
+    }
+}
+
+impl From<Uri> for String {
+    fn from(uri: Uri) -> Self {
+        uri.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Uri, is_external_tileset_uri, resolve_uri};
-
-    // ==== classification ================================================
-    // Mirrors how cesium-native's `CesiumUtility::Uri` constructor decides
-    // between a real scheme and an opaque/ambiguous one.
 
     mod classification {
         use super::*;
@@ -246,7 +257,6 @@ mod tests {
 
         #[test]
         fn protocol_relative_is_treated_as_https() {
-            // Same rule cesium-native's Uri constructor applies.
             assert_eq!(
                 Uri::parse("//example.com/a.json").to_string(),
                 "https://example.com/a.json"
@@ -255,8 +265,6 @@ mod tests {
 
         #[test]
         fn custom_hierarchical_schemes_are_urls() {
-            // cesium-native explicitly supports non-file schemes such as
-            // "geopackage:/home/x.gpkg" as real URLs.
             assert!(matches!(
                 Uri::parse("geopackage:/home/courtyard_imagery.gpkg"),
                 Uri::Url(_)
@@ -307,9 +315,6 @@ mod tests {
             assert!(matches!(Uri::parse("data/tileset.json"), Uri::UnixPath(_)));
         }
     }
-
-    // ==== Uri::resolve — URL base =======================================
-    // Mirrors CesiumUtility's `TEST_CASE("Uri::resolve")`.
 
     mod resolve_url_base {
         use super::*;
@@ -478,10 +483,6 @@ mod tests {
             assert_eq!(uri.resolve("").to_string(), "/data/tileset.json");
         }
     }
-
-    // ==== file_name / stem / extension ===================================
-    // Mirrors CesiumUtility's `Uri::getFileName` / `getStem` / `getExtension`
-    // test cases, adapted to each of the three location kinds.
 
     mod file_name_stem_extension {
         use super::*;

@@ -1,9 +1,10 @@
 use crate::availability::{OctreeTileId, QuadtreeTileId};
 use crate::generated::BoundingVolume;
+use crate::uri::Uri;
 
 impl QuadtreeTileId {
     /// Resolve an implicit tiling URL template for this tile against `base`.
-    pub fn resolve_url(self, base: &str, template: &str) -> String {
+    pub fn resolve_url(self, base: &Uri, template: &str) -> Uri {
         let expanded = expand_tile_url(
             template,
             &[
@@ -12,7 +13,7 @@ impl QuadtreeTileId {
                 ("y", &self.y.to_string()),
             ],
         );
-        resolve_url(base, &expanded)
+        base.resolve(&expanded)
     }
 
     /// Subdivide `root` to the child bounding volume at this tile's coordinates.
@@ -52,7 +53,7 @@ impl QuadtreeTileId {
 
 impl OctreeTileId {
     /// Resolve an implicit tiling URL template for this tile against `base`.
-    pub fn resolve_url(self, base: &str, template: &str) -> String {
+    pub fn resolve_url(self, base: &Uri, template: &str) -> Uri {
         let expanded = expand_tile_url(
             template,
             &[
@@ -62,7 +63,7 @@ impl OctreeTileId {
                 ("z", &self.z.to_string()),
             ],
         );
-        resolve_url(base, &expanded)
+        base.resolve(&expanded)
     }
 
     /// Subdivide `root` to the child bounding volume at this tile's coordinates.
@@ -186,40 +187,38 @@ fn expand_tile_url(template: &str, vars: &[(&str, &str)]) -> String {
     out
 }
 
-pub fn resolve_url(base: &str, path: &str) -> String {
-    crate::uri::resolve_uri(base, path)
-}
 #[cfg(test)]
 mod tests {
     use crate::availability::{OctreeTileId, QuadtreeTileId};
+    use crate::uri::Uri;
 
     #[test]
     fn test_resolve_url_quad() {
         let tile = QuadtreeTileId::new(3, 5, 2);
-        let url = tile.resolve_url(
-            "https://example.com/tileset/tileset.json",
-            "subtrees/{level}/{x}/{y}.subtree",
+        let base = Uri::parse("https://example.com/tileset/tileset.json");
+        let url = tile.resolve_url(&base, "subtrees/{level}/{x}/{y}.subtree");
+        assert_eq!(
+            url.to_string(),
+            "https://example.com/tileset/subtrees/3/5/2.subtree"
         );
-        assert_eq!(url, "https://example.com/tileset/subtrees/3/5/2.subtree");
     }
 
     #[test]
     fn test_resolve_url_oct() {
         let tile = OctreeTileId::new(2, 1, 3, 0);
-        let url = tile.resolve_url(
-            "https://example.com/tileset.json",
-            "subtrees/{level}/{x}/{y}/{z}.subtree",
-        );
-        assert_eq!(url, "https://example.com/subtrees/2/1/3/0.subtree");
+        let base = Uri::parse("https://example.com/tileset.json");
+        let url = tile.resolve_url(&base, "subtrees/{level}/{x}/{y}/{z}.subtree");
+        assert_eq!(url.to_string(), "https://example.com/subtrees/2/1/3/0.subtree");
     }
 
     #[test]
     fn test_resolve_url_absolute_passthrough() {
         let tile = QuadtreeTileId::new(0, 0, 0);
+        let base = Uri::parse("https://example.com/tileset.json");
         let url = tile.resolve_url(
-            "https://example.com/tileset.json",
+            &base,
             "https://cdn.example.com/subtrees/{level}/{x}/{y}.subtree",
         );
-        assert!(url.starts_with("https://cdn.example.com/"));
+        assert!(url.to_string().starts_with("https://cdn.example.com/"));
     }
 }
