@@ -89,9 +89,7 @@
 
 mod availability;
 mod error;
-mod esri_crs;
-mod ext_mesh_features;
-mod extensions;
+mod extension;
 mod generated;
 mod implicit_tiling;
 mod impls;
@@ -112,9 +110,9 @@ pub use availability::{
     AvailabilityNode, AvailabilityView, OctreeAvailability, OctreeAvailabilityNode, OctreeTileId,
     QuadtreeAvailability, QuadtreeTileId, SubtreeAvailability, TileAvailabilityFlags,
 };
-pub use esri_crs::{EsriCrs, EsriCrsTransform};
-pub use ext_mesh_features::{EXTENSION_NAME as EXT_MESH_FEATURES_NAME, ExtMeshFeatures, FeatureId};
-pub use extensions::{Extension, HasExtensions};
+pub use extension::{
+    EsriCrs, EsriCrsTransform, ExtMeshFeatures, ExtMeshFeaturesFeatureId, Extension, HasExtensions,
+};
 pub use metadata_query::{FoundMetadataProperty, MetadataQuery};
 pub use reader::{
     TileParseError, fold_from_reader, from_reader, from_slice, from_str, load, load_async,

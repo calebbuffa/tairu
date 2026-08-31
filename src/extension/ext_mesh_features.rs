@@ -3,9 +3,9 @@
 //! Reference: https://github.com/CesiumGS/glTF/tree/proposal-EXT_mesh_features
 
 /// The `EXT_mesh_features` extension name.
-pub const EXTENSION_NAME: &str = "EXT_mesh_features";
+const EXTENSION_NAME: &str = "EXT_mesh_features";
 
-use crate::extensions::Extension;
+use super::Extension;
 use serde::{Deserialize, Serialize};
 
 /// The `EXT_mesh_features` extension data on a mesh primitive.
@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct ExtMeshFeatures {
     /// The feature-ID descriptors carried by the primitive.
-    pub feature_ids: Vec<FeatureId>,
+    pub feature_ids: Vec<ExtMeshFeaturesFeatureId>,
 }
 
 impl Extension for ExtMeshFeatures {
@@ -32,7 +32,7 @@ impl ExtMeshFeatures {
 /// One feature-ID definition within `EXT_mesh_features`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FeatureId {
+pub struct ExtMeshFeaturesFeatureId {
     /// The number of features described by this definition.
     pub feature_count: u32,
     /// The vertex-attribute set index carrying per-vertex feature IDs.
