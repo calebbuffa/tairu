@@ -971,7 +971,7 @@ pub struct NoDataValue {
 // Generated typed extension bindings
 // ---------------------------------------------------------------------------
 
-impl crate::extensions::HasExtensions for AnyValue {
+impl crate::HasExtensions for AnyValue {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -981,7 +981,7 @@ impl crate::extensions::HasExtensions for AnyValue {
     }
 }
 
-impl crate::extensions::HasExtensions for Asset {
+impl crate::HasExtensions for Asset {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -991,7 +991,7 @@ impl crate::extensions::HasExtensions for Asset {
     }
 }
 
-impl crate::extensions::HasExtensions for Availability {
+impl crate::HasExtensions for Availability {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1001,7 +1001,7 @@ impl crate::extensions::HasExtensions for Availability {
     }
 }
 
-impl crate::extensions::HasExtensions for BoundingVolume {
+impl crate::HasExtensions for BoundingVolume {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1011,7 +1011,7 @@ impl crate::extensions::HasExtensions for BoundingVolume {
     }
 }
 
-impl crate::extensions::HasExtensions for Buffer {
+impl crate::HasExtensions for Buffer {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1021,7 +1021,7 @@ impl crate::extensions::HasExtensions for Buffer {
     }
 }
 
-impl crate::extensions::HasExtensions for BufferView {
+impl crate::HasExtensions for BufferView {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1031,7 +1031,7 @@ impl crate::extensions::HasExtensions for BufferView {
     }
 }
 
-impl crate::extensions::HasExtensions for Class {
+impl crate::HasExtensions for Class {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1041,7 +1041,7 @@ impl crate::extensions::HasExtensions for Class {
     }
 }
 
-impl crate::extensions::HasExtensions for ClassProperty {
+impl crate::HasExtensions for ClassProperty {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1051,7 +1051,7 @@ impl crate::extensions::HasExtensions for ClassProperty {
     }
 }
 
-impl crate::extensions::HasExtensions for ClassStatistics {
+impl crate::HasExtensions for ClassStatistics {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1061,7 +1061,7 @@ impl crate::extensions::HasExtensions for ClassStatistics {
     }
 }
 
-impl crate::extensions::HasExtensions for Content {
+impl crate::HasExtensions for Content {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1071,7 +1071,7 @@ impl crate::extensions::HasExtensions for Content {
     }
 }
 
-impl crate::extensions::HasExtensions for Enum {
+impl crate::HasExtensions for Enum {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1081,7 +1081,7 @@ impl crate::extensions::HasExtensions for Enum {
     }
 }
 
-impl crate::extensions::HasExtensions for EnumValue {
+impl crate::HasExtensions for EnumValue {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1091,7 +1091,7 @@ impl crate::extensions::HasExtensions for EnumValue {
     }
 }
 
-impl crate::extensions::HasExtensions for Group {
+impl crate::HasExtensions for Group {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1101,7 +1101,7 @@ impl crate::extensions::HasExtensions for Group {
     }
 }
 
-impl crate::extensions::HasExtensions for ImplicitTiling {
+impl crate::HasExtensions for ImplicitTiling {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1111,7 +1111,7 @@ impl crate::extensions::HasExtensions for ImplicitTiling {
     }
 }
 
-impl crate::extensions::HasExtensions for MetadataEntity {
+impl crate::HasExtensions for MetadataEntity {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1121,7 +1121,7 @@ impl crate::extensions::HasExtensions for MetadataEntity {
     }
 }
 
-impl crate::extensions::HasExtensions for NoDataValue {
+impl crate::HasExtensions for NoDataValue {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1131,7 +1131,7 @@ impl crate::extensions::HasExtensions for NoDataValue {
     }
 }
 
-impl crate::extensions::HasExtensions for NumericValue {
+impl crate::HasExtensions for NumericValue {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1141,7 +1141,7 @@ impl crate::extensions::HasExtensions for NumericValue {
     }
 }
 
-impl crate::extensions::HasExtensions for Properties {
+impl crate::HasExtensions for Properties {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1151,7 +1151,7 @@ impl crate::extensions::HasExtensions for Properties {
     }
 }
 
-impl crate::extensions::HasExtensions for PropertyStatistics {
+impl crate::HasExtensions for PropertyStatistics {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1161,7 +1161,7 @@ impl crate::extensions::HasExtensions for PropertyStatistics {
     }
 }
 
-impl crate::extensions::HasExtensions for PropertyTable {
+impl crate::HasExtensions for PropertyTable {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1171,7 +1171,7 @@ impl crate::extensions::HasExtensions for PropertyTable {
     }
 }
 
-impl crate::extensions::HasExtensions for PropertyTableProperty {
+impl crate::HasExtensions for PropertyTableProperty {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1181,7 +1181,7 @@ impl crate::extensions::HasExtensions for PropertyTableProperty {
     }
 }
 
-impl crate::extensions::HasExtensions for Schema {
+impl crate::HasExtensions for Schema {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1191,7 +1191,7 @@ impl crate::extensions::HasExtensions for Schema {
     }
 }
 
-impl crate::extensions::HasExtensions for Statistics {
+impl crate::HasExtensions for Statistics {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1201,7 +1201,7 @@ impl crate::extensions::HasExtensions for Statistics {
     }
 }
 
-impl crate::extensions::HasExtensions for Subtree {
+impl crate::HasExtensions for Subtree {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1211,7 +1211,7 @@ impl crate::extensions::HasExtensions for Subtree {
     }
 }
 
-impl crate::extensions::HasExtensions for Subtrees {
+impl crate::HasExtensions for Subtrees {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1221,7 +1221,7 @@ impl crate::extensions::HasExtensions for Subtrees {
     }
 }
 
-impl crate::extensions::HasExtensions for Tile {
+impl crate::HasExtensions for Tile {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }
@@ -1231,7 +1231,7 @@ impl crate::extensions::HasExtensions for Tile {
     }
 }
 
-impl crate::extensions::HasExtensions for Tileset {
+impl crate::HasExtensions for Tileset {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
         &self.extensions
     }

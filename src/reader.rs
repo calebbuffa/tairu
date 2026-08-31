@@ -1,9 +1,10 @@
 //! Parse `tileset.json` eagerly, or process it with one
 //! bounded-memory streaming fold.
 
-use crate::ext_mesh_features;
-use crate::uri::{Uri, UriLoadError};
-use crate::{Content, Tile, Tileset};
+use crate::{
+    Content, ExtMeshFeatures, Tile, Tileset,
+    uri::{Uri, UriLoadError},
+};
 use serde::de::{DeserializeSeed, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde_json::Value as JsonValue;
 use std::cell::RefCell;
@@ -554,10 +555,10 @@ fn validate(tileset: &Tileset) -> Result<(), TileParseError> {
             );
         }
 
-        if ext == ext_mesh_features::EXTENSION_NAME
+        if ext == ExtMeshFeatures::EXTENSION_NAME
             && let Some(content) = &tileset.root.content
-            && let Some(value) = content.extensions.get(ext_mesh_features::EXTENSION_NAME)
-            && let Some(emf) = ext_mesh_features::ExtMeshFeatures::from_json(value)
+            && let Some(value) = content.extensions.get(ExtMeshFeatures::EXTENSION_NAME)
+            && let Some(emf) = ExtMeshFeatures::from_json(value)
         {
             for fid in &emf.feature_ids {
                 if fid.feature_count == 0 {

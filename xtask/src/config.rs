@@ -68,9 +68,6 @@ pub struct ExtraFieldConfig {
     pub name: String,
     /// Rust type expression, e.g. `"Vec<u8>"`.
     pub rust_type: String,
-    /// Default expression used in `impl Default`. Defaults to `Default::default()`.
-    #[serde(default)]
-    pub default_expr: Option<String>,
     /// Doc comment (single line).
     #[serde(default)]
     pub doc: Option<String>,
@@ -83,22 +80,6 @@ pub struct ExtraFieldConfig {
 
 fn default_true() -> bool {
     true
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ExtensionConfig {
-    /// The official extension name (e.g. "KHR_draco_mesh_compression").
-    pub extension_name: String,
-
-    /// Relative path to the extension's JSON Schema file.
-    /// If omitted, schema-gen will search `--extension-dir` for a directory
-    /// matching the extension name and find `*.schema.json` files inside it.
-    pub schema: Option<String>,
-
-    /// Which glTF object(s) this extension attaches to.
-    #[serde(default)]
-    pub attach_to: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -175,7 +175,7 @@ fn render_generated_extension_impls_from_module(module_src: &str) -> String {
         "// ---------------------------------------------------------------------------\n\n",
     );
     for name in names {
-        out.push_str("impl crate::extensions::HasExtensions for ");
+        out.push_str("impl crate::HasExtensions for ");
         out.push_str(&name);
         out.push_str(" {\n");
         out.push_str(
