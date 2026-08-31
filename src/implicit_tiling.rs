@@ -208,7 +208,10 @@ mod tests {
         let tile = OctreeTileId::new(2, 1, 3, 0);
         let base = Uri::parse("https://example.com/tileset.json");
         let url = tile.resolve_url(&base, "subtrees/{level}/{x}/{y}/{z}.subtree");
-        assert_eq!(url.to_string(), "https://example.com/subtrees/2/1/3/0.subtree");
+        assert_eq!(
+            url.to_string(),
+            "https://example.com/subtrees/2/1/3/0.subtree"
+        );
     }
 
     #[test]

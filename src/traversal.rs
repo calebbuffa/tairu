@@ -118,12 +118,12 @@ pub fn walk<F, V, E>(
     mut visit: V,
 ) -> Result<(), WalkError<E>>
 where
-    F: FnMut(&Uri) -> Result<Vec<u8>, E>,
+    F: FnMut(&str) -> Result<Vec<u8>, E>,
     V: FnMut(&mut TileVisit<'_>) -> Result<TraversalControl, E>,
     E: std::error::Error + 'static,
 {
     let root_uri = root_uri.into();
-    let bytes = fetch(&root_uri).map_err(|source| WalkError::Fetch {
+    let bytes = fetch(&root_uri.to_string()).map_err(|source| WalkError::Fetch {
         uri: root_uri.to_string(),
         source,
     })?;
@@ -145,6 +145,9 @@ where
     )
 }
 
+// Internal recursive walk; the context (transform, depth, sources, visitor)
+// is threaded through parameters by design.
+#[allow(clippy::too_many_arguments)]
 fn walk_tile<F, V, E>(
     tile: &Tile,
     source_uri: &Uri,
@@ -156,7 +159,7 @@ fn walk_tile<F, V, E>(
     visit: &mut V,
 ) -> Result<(), WalkError<E>>
 where
-    F: FnMut(&Uri) -> Result<Vec<u8>, E>,
+    F: FnMut(&str) -> Result<Vec<u8>, E>,
     V: FnMut(&mut TileVisit<'_>) -> Result<TraversalControl, E>,
     E: std::error::Error + 'static,
 {
@@ -209,7 +212,7 @@ where
             return Err(WalkError::ExternalCycle { uri: resolved_key });
         }
         let result = (|| {
-            let bytes = fetch(&resolved_uri).map_err(|source| WalkError::Fetch {
+            let bytes = fetch(&resolved_uri.to_string()).map_err(|source| WalkError::Fetch {
                 uri: resolved_key.clone(),
                 source,
             })?;
@@ -234,6 +237,9 @@ where
     Ok(())
 }
 
+// Internal recursive walk; the context (implicit tiling, transform, depth,
+// sources, visitor) is threaded through parameters by design.
+#[allow(clippy::too_many_arguments)]
 fn walk_implicit_tile<F, V, E>(
     tile: &Tile,
     implicit: &crate::generated::ImplicitTiling,
@@ -245,7 +251,7 @@ fn walk_implicit_tile<F, V, E>(
     visit: &mut V,
 ) -> Result<(), WalkError<E>>
 where
-    F: FnMut(&Uri) -> Result<Vec<u8>, E>,
+    F: FnMut(&str) -> Result<Vec<u8>, E>,
     V: FnMut(&mut TileVisit<'_>) -> Result<TraversalControl, E>,
     E: std::error::Error + 'static,
 {
@@ -282,7 +288,7 @@ where
                             .id
                             .subtree_root(expander.subtree_levels)
                             .resolve_url(source_uri, &expander.subtree_uri_template);
-                        let bytes = fetch(&uri).map_err(|source| WalkError::Fetch {
+                        let bytes = fetch(&uri.to_string()).map_err(|source| WalkError::Fetch {
                             uri: uri.to_string(),
                             source,
                         })?;
@@ -350,7 +356,7 @@ where
                             .id
                             .subtree_root(expander.subtree_levels)
                             .resolve_url(source_uri, &expander.subtree_uri_template);
-                        let bytes = fetch(&uri).map_err(|source| WalkError::Fetch {
+                        let bytes = fetch(&uri.to_string()).map_err(|source| WalkError::Fetch {
                             uri: uri.to_string(),
                             source,
                         })?;
@@ -616,7 +622,7 @@ mod tests {
     fn walk_uses_identity_for_omitted_transforms() {
         let bytes = tileset_with_root(root(serde_json::json!([])));
         let mut resources = HashMap::from([(String::from("memory://root.json"), bytes)]);
-        let mut fetch = |uri: &Uri| {
+        let mut fetch = |uri: &str| {
             let key = uri.to_string();
             resources
                 .remove(&key)
@@ -649,7 +655,7 @@ mod tests {
             (String::from("memory://root.json"), root_bytes),
             (String::from(external_uri), nested_bytes),
         ]);
-        let mut fetch = |uri: &Uri| {
+        let mut fetch = |uri: &str| {
             let key = uri.to_string();
             resources
                 .remove(&key)

@@ -48,11 +48,11 @@ pub trait TilesetFold {
 /// Fetches and parses a tileset through a caller-owned closure.
 pub fn load<F, E>(uri: impl Into<Uri>, fetch: &mut F) -> Result<Tileset, UriLoadError<E>>
 where
-    F: FnMut(&Uri) -> Result<Vec<u8>, E>,
+    F: FnMut(&str) -> Result<Vec<u8>, E>,
     E: std::error::Error + 'static,
 {
     let uri = uri.into();
-    let bytes = fetch(&uri).map_err(|source| UriLoadError::Fetch {
+    let bytes = fetch(&uri.to_string()).map_err(|source| UriLoadError::Fetch {
         uri: uri.to_string(),
         source,
     })?;
@@ -68,15 +68,17 @@ pub async fn load_async<F, Fut, E>(
     fetch: &mut F,
 ) -> Result<Tileset, UriLoadError<E>>
 where
-    F: FnMut(&Uri) -> Fut,
+    F: FnMut(&str) -> Fut,
     Fut: Future<Output = Result<Vec<u8>, E>>,
     E: std::error::Error + 'static,
 {
     let uri = uri.into();
-    let bytes = fetch(&uri).await.map_err(|source| UriLoadError::Fetch {
-        uri: uri.to_string(),
-        source,
-    })?;
+    let bytes = fetch(&uri.to_string())
+        .await
+        .map_err(|source| UriLoadError::Fetch {
+            uri: uri.to_string(),
+            source,
+        })?;
     from_slice(&bytes).map_err(|source| UriLoadError::Parse {
         uri: uri.to_string(),
         source,
@@ -589,7 +591,7 @@ mod tests {
     #[test]
     fn uri_loading_fetches_the_requested_uri() {
         let mut requested = None;
-        let mut fetch = |uri: &Uri| -> Result<Vec<u8>, std::io::Error> {
+        let mut fetch = |uri: &str| -> Result<Vec<u8>, std::io::Error> {
             requested = Some(uri.to_string());
             Ok(minimal_json().to_vec())
         };
