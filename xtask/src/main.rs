@@ -72,7 +72,7 @@ fn main() {
     let config: Config =
         serde_json::from_str(&config_text).unwrap_or_else(|e| panic!("Cannot parse config: {e}"));
 
-    let mut cache = SchemaCache::new(vec![schema_dir.clone()], vec![]);
+    let mut cache = SchemaCache::new(vec![schema_dir.clone()]);
     let (root_schema, root_path) = cache
         .load_with_path(schema_file.to_string_lossy().as_ref())
         .unwrap_or_else(|| panic!("Cannot load schema {}", schema_file.display()));

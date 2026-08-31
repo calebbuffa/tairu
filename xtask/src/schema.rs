@@ -50,7 +50,6 @@ pub struct JsonSchema {
 /// current context.
 pub struct SchemaCache {
     schema_paths: Vec<PathBuf>,
-    extension_paths: Vec<PathBuf>,
     cache: HashMap<PathBuf, JsonSchema>,
     /// Raw JSON cache for fragment resolution.
     raw_cache: HashMap<PathBuf, serde_json::Value>,
@@ -59,10 +58,9 @@ pub struct SchemaCache {
 }
 
 impl SchemaCache {
-    pub fn new(schema_paths: Vec<PathBuf>, extension_paths: Vec<PathBuf>) -> Self {
+    pub fn new(schema_paths: Vec<PathBuf>) -> Self {
         Self {
             schema_paths,
-            extension_paths,
             cache: HashMap::new(),
             raw_cache: HashMap::new(),
             context_stack: Vec::new(),
@@ -118,41 +116,6 @@ impl SchemaCache {
             }
         } else {
             Some((schema, Some(canonical)))
-        }
-    }
-
-    /// Load an extension schema by name, prioritizing paths containing the
-    /// extension name.
-    pub fn load_extension(
-        &mut self,
-        schema_name: &str,
-        extension_name: &str,
-    ) -> Option<JsonSchema> {
-        let (file_part, fragment) = split_fragment(schema_name);
-
-        let mut search: Vec<PathBuf> = self
-            .extension_paths
-            .iter()
-            .map(|base| base.join(file_part))
-            .collect();
-
-        // Prioritize paths containing the extension name.
-        search.sort_by(|a, b| {
-            let a_has = a.to_string_lossy().contains(extension_name);
-            let b_has = b.to_string_lossy().contains(extension_name);
-            b_has.cmp(&a_has)
-        });
-
-        let (schema, canonical) = self.load_from_paths(&search)?;
-
-        if let Some(frag) = fragment {
-            if let Some(raw) = self.raw_cache.get(&canonical) {
-                resolve_fragment_raw(raw, &frag)
-            } else {
-                None
-            }
-        } else {
-            Some(schema)
         }
     }
 
