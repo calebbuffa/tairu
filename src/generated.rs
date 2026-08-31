@@ -3,7 +3,7 @@
 
 //! Generated 3D Tiles 1.0/1.1 data model. Do not edit — run `cargo run -p xtask` to regenerate.
 
-#![allow(clippy::all)]
+#![allow(clippy::all, missing_docs)]
 
 use serde::{Deserialize, Serialize};
 

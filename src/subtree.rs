@@ -90,16 +90,25 @@ pub enum SubtreeParseError {
     Json(#[from] serde_json::Error),
     /// A `bufferView` index in the JSON is out of range.
     #[error("subtree: bufferView index {index} out of range")]
-    InvalidBufferView { index: usize },
+    InvalidBufferView {
+        /// The offending bufferView index.
+        index: usize,
+    },
     /// A buffer view's byte range exceeds the binary blob.
     #[error("subtree: buffer view range exceeds binary payload")]
     BufferOutOfRange,
     /// A `buffer.uri` was referenced but not supplied in `external_buffers`.
     #[error("subtree: external buffer URI '{uri}' not provided")]
-    MissingExternalBuffer { uri: String },
+    MissingExternalBuffer {
+        /// The external buffer URI that was not supplied.
+        uri: String,
+    },
     /// A `buffer` index in a `bufferView` is out of range.
     #[error("subtree: buffer index {index} out of range")]
-    InvalidBufferIndex { index: usize },
+    InvalidBufferIndex {
+        /// The offending buffer index.
+        index: usize,
+    },
 }
 
 /// Parse a raw `.subtree` response body into a [`SubtreeAvailability`].

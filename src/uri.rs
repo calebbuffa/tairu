@@ -16,15 +16,21 @@ use url::Url;
 /// A resource-loading failure while loading a tileset by URI.
 #[derive(Debug, thiserror::Error)]
 pub enum UriLoadError<E: std::error::Error + 'static> {
+    /// The URI could not be fetched by the caller's closure.
     #[error("failed to fetch {uri}: {source}")]
     Fetch {
+        /// The URI that could not be fetched.
         uri: String,
+        /// The underlying transport error.
         #[source]
         source: E,
     },
+    /// The fetched bytes could not be parsed as a tileset.
     #[error("failed to parse {uri}: {source}")]
     Parse {
+        /// The URI of the unparseable tileset.
         uri: String,
+        /// The underlying parse error.
         #[source]
         source: TileParseError,
     },
@@ -133,6 +139,9 @@ impl Uri {
     }
 
     /// Returns the final path segment (or URL path segment), if any.
+    /// The final component of this location, including any extension.
+    ///
+    /// Returns `None` for URLs without a path, paths ending in `..`, etc.
     pub fn file_name(&self) -> Option<&str> {
         match self {
             Uri::Url(url) => url.path_segments()?.next_back().filter(|s| !s.is_empty()),
@@ -145,6 +154,7 @@ impl Uri {
     ///
     /// A leading dot (e.g. `.hidden`) is not treated as an extension
     /// separator, so the stem of `.hidden` is `.hidden`, not empty.
+    /// The final component of this location without its extension.
     pub fn stem(&self) -> Option<&str> {
         match self {
             Uri::Url(_) => {
@@ -159,6 +169,10 @@ impl Uri {
         }
     }
 
+    /// The extension of the final component, *including* the leading dot.
+    ///
+    /// A trailing dot (e.g. `"test."`) yields `Some(".")`; dotfiles have no
+    /// extension. Returns `None` when there is no extension.
     pub fn extension(&self) -> Option<&str> {
         match self {
             Uri::Url(_) => {

@@ -1720,7 +1720,7 @@ pub fn render_module(
     let _ = writeln!(out);
     let _ = writeln!(out, "//! {module_doc}");
     let _ = writeln!(out);
-    let _ = writeln!(out, "#![allow(clippy::all)]");
+    let _ = writeln!(out, "#![allow(clippy::all, missing_docs)]");
     let _ = writeln!(out);
     let referenced_custom_types = referenced_custom_types(structs, custom_types);
 

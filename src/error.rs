@@ -12,12 +12,19 @@ use std::io;
 pub enum Error {
     /// Failed to fetch a resource.
     #[error("failed to fetch {uri}: {reason}")]
-    Fetch { uri: String, reason: String },
+    Fetch {
+        /// The URI that could not be fetched.
+        uri: String,
+        /// Human-readable failure detail.
+        reason: String,
+    },
 
     /// Failed to parse tileset JSON.
     #[error("failed to parse tileset {uri}: {source}")]
     TileParse {
+        /// The URI of the tileset that failed to parse.
         uri: String,
+        /// The underlying parse error.
         #[source]
         source: TileParseError,
     },
@@ -36,11 +43,19 @@ pub enum Error {
 
     /// External tileset cycle detected during traversal.
     #[error("external tileset cycle detected at {uri}")]
-    ExternalCycle { uri: String },
+    ExternalCycle {
+        /// The URI where the cycle was detected.
+        uri: String,
+    },
 
     /// URI parsing or resolution failed.
     #[error("invalid URI {uri}: {reason}")]
-    InvalidUri { uri: String, reason: String },
+    InvalidUri {
+        /// The malformed URI.
+        uri: String,
+        /// Human-readable failure detail.
+        reason: String,
+    },
 }
 
 impl Error {

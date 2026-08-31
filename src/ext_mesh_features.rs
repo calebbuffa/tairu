@@ -2,15 +2,17 @@
 //!
 //! Reference: https://github.com/CesiumGS/glTF/tree/proposal-EXT_mesh_features
 
-// GltfExtension registration lives in the cesna-gltf layer, not here.
+/// The `EXT_mesh_features` extension name.
 pub const EXTENSION_NAME: &str = "EXT_mesh_features";
 
 use crate::extensions::Extension;
 use serde::{Deserialize, Serialize};
 
+/// The `EXT_mesh_features` extension data on a mesh primitive.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtMeshFeatures {
+    /// The feature-ID descriptors carried by the primitive.
     pub feature_ids: Vec<FeatureId>,
 }
 
@@ -27,14 +29,19 @@ impl ExtMeshFeatures {
     }
 }
 
+/// One feature-ID definition within `EXT_mesh_features`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FeatureId {
+    /// The number of features described by this definition.
     pub feature_count: u32,
+    /// The vertex-attribute set index carrying per-vertex feature IDs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attribute: Option<u32>,
+    /// The property-table index carrying per-feature properties.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub property_table: Option<u32>,
+    /// A human-readable label for the feature set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
 }

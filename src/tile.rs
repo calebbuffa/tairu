@@ -1,20 +1,28 @@
-//! Binary tile format detection.
-//!
-//! TileTransform and TileBoundingVolumes (which use glam/terra/zukei) live in the cesna-tileset layer.
+//! Tile format detection.
 
 /// Binary tile format detected from the URL or magic bytes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TileFormat {
+    /// glTF binary asset.
     Glb,
+    /// Batched 3D model (legacy).
     B3dm,
+    /// Instanced 3D model (legacy).
     I3dm,
+    /// Composite of other tile formats (legacy).
     Cmpt,
+    /// Point cloud (legacy).
     Pnts,
+    /// JSON payload (a tileset or JSON subtree).
     Json,
+    /// Unrecognized format.
     Unknown,
 }
 
 impl TileFormat {
+    /// Detect the tile format from a URL and/or payload magic bytes.
+    ///
+    /// Magic bytes take precedence; otherwise the URL's file extension is used.
     pub fn detect(url: &str, data: &[u8]) -> Self {
         if data.len() >= 4 {
             match &data[..4] {

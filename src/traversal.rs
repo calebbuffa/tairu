@@ -16,8 +16,11 @@ pub type Mat4d = [f64; 16];
 /// Control flow for node visitors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TraversalControl {
+    /// Visit this node's descendants and continue the traversal.
     Continue,
+    /// Do not expand this node's children; continue with siblings.
     SkipChildren,
+    /// Terminate the entire traversal immediately.
     Stop,
 }
 
@@ -50,22 +53,33 @@ fn identity_transform() -> Mat4d {
 /// Failure returned by the high-level tile walker.
 #[derive(Debug, thiserror::Error)]
 pub enum WalkError<E: std::error::Error + 'static> {
+    /// A resource could not be fetched by the caller's closure.
     #[error("failed to fetch {uri}: {source}")]
     Fetch {
+        /// The URI that could not be fetched.
         uri: String,
+        /// The underlying transport error.
         #[source]
         source: E,
     },
+    /// A fetched tileset could not be parsed.
     #[error("failed to parse tileset {uri}: {source}")]
     Parse {
+        /// The URI of the unparseable tileset.
         uri: String,
+        /// The underlying parse error.
         #[source]
         source: TileParseError,
     },
+    /// The caller's visitor returned an error.
     #[error("tile visitor failed: {0}")]
     Visit(#[source] E),
+    /// An external tileset was referenced while already being visited.
     #[error("external tileset cycle detected at {uri}")]
-    ExternalCycle { uri: String },
+    ExternalCycle {
+        /// The URI where the cycle was detected.
+        uri: String,
+    },
 }
 
 /// A tile and the resolved transform state at the point it is visited.
@@ -74,11 +88,17 @@ pub enum WalkError<E: std::error::Error + 'static> {
 /// `local_transform` is the effective transform used for this traversal and
 /// may be replaced before descendants are expanded.
 pub struct TileVisit<'a> {
+    /// The complete source tile being visited.
     pub tile: &'a Tile,
+    /// The tileset URI this tile came from.
     pub source_uri: &'a Uri,
+    /// Traversal depth (0 for the root of the top-level tileset).
     pub depth: usize,
+    /// Whether this tile is the root of an external tileset.
     pub is_external_root: bool,
+    /// The accumulated world transform of the parent tile.
     pub parent_transform: Mat4d,
+    /// The tile's own core transform (matrix, or composed TRS).
     pub core_local_transform: Mat4d,
     local_transform: Mat4d,
 }

@@ -1,7 +1,5 @@
 //! Subtree availability for 3D Tiles implicit tiling.
 //!
-//! Mirrors `Cesium3DTilesContent::SubtreeAvailability`.
-//!
 //! A *subtree* is a fixed-depth slice of an implicit tile tree.  Its
 //! availability data describes, for every tile/content/child-subtree position
 //! within the slice, whether that item exists.  Availability is stored either
@@ -30,12 +28,16 @@ use crate::generated::SubdivisionScheme;
 /// Quadtree tile coordinates — local to avoid external math-library deps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct QuadtreeTileId {
+    /// Level within the quadtree (0 = root).
     pub level: u32,
+    /// X coordinate at this level.
     pub x: u32,
+    /// Y coordinate at this level.
     pub y: u32,
 }
 
 impl QuadtreeTileId {
+    /// Construct a tile ID from its level and coordinates.
     pub fn new(level: u32, x: u32, y: u32) -> Self {
         Self { level, x, y }
     }
@@ -62,6 +64,7 @@ impl QuadtreeTileId {
         morton_2d(rel.x, rel.y) as u64
     }
 
+    /// The four child tile IDs at `level + 1`, in Morton order.
     pub fn children(self) -> [QuadtreeTileId; 4] {
         let cl = self.level + 1;
         let (bx, by) = (self.x * 2, self.y * 2);
@@ -73,6 +76,7 @@ impl QuadtreeTileId {
         ]
     }
 
+    /// The root tile ID of the fixed-size subtree that contains this tile.
     pub fn subtree_root(self, subtree_levels: u32) -> QuadtreeTileId {
         let subtree_level = (self.level / subtree_levels) * subtree_levels;
         let levels_down = self.level - subtree_level;
@@ -83,21 +87,28 @@ impl QuadtreeTileId {
 /// Octree tile coordinates — local to avoid external math-library deps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OctreeTileId {
+    /// Level within the octree (0 = root).
     pub level: u32,
+    /// X coordinate at this level.
     pub x: u32,
+    /// Y coordinate at this level.
     pub y: u32,
+    /// Z coordinate at this level.
     pub z: u32,
 }
 
 impl OctreeTileId {
+    /// Construct a tile ID from its level and coordinates.
     pub fn new(level: u32, x: u32, y: u32, z: u32) -> Self {
         Self { level, x, y, z }
     }
 
+    /// Morton index for (x, y, z) within this tile's level.
     pub fn morton_index(self) -> u64 {
         morton_3d(self.x, self.y, self.z) as u64
     }
 
+    /// Tile coordinates relative to the given subtree-root tile.
     pub fn relative_to(self, subtree_id: Self) -> Self {
         debug_assert!(self.level >= subtree_id.level);
         let diff = self.level - subtree_id.level;
@@ -109,11 +120,13 @@ impl OctreeTileId {
         }
     }
 
+    /// Morton index of `child` relative to this subtree's bottom level.
     pub fn relative_morton_index(self, child: Self) -> u64 {
         let rel = child.relative_to(self);
         morton_3d(rel.x, rel.y, rel.z) as u64
     }
 
+    /// The eight child tile IDs at `level + 1`, in Morton order.
     pub fn children(self) -> [OctreeTileId; 8] {
         let cl = self.level + 1;
         let (bx, by, bz) = (self.x * 2, self.y * 2, self.z * 2);
@@ -129,6 +142,7 @@ impl OctreeTileId {
         ]
     }
 
+    /// The root tile ID of the fixed-size subtree that contains this tile.
     pub fn subtree_root(self, subtree_levels: u32) -> OctreeTileId {
         let subtree_level = (self.level / subtree_levels) * subtree_levels;
         let d = self.level - subtree_level;
@@ -272,6 +286,7 @@ impl SubtreeAvailability {
         }
     }
 
+    /// Tile availability for a quadtree tile, given the ID of the subtree containing it.
     pub fn is_tile_available_quad(
         &self,
         subtree_id: QuadtreeTileId,
@@ -281,15 +296,18 @@ impl SubtreeAvailability {
         self.is_tile_available(relative.level, relative.morton_index())
     }
 
+    /// Tile availability for an octree tile, given the ID of the subtree containing it.
     pub fn is_tile_available_oct(&self, subtree_id: OctreeTileId, tile_id: OctreeTileId) -> bool {
         let relative = tile_id.relative_to(subtree_id);
         self.is_tile_available(relative.level, relative.morton_index())
     }
 
+    /// Tile availability at a relative level and Morton index within this subtree.
     pub fn is_tile_available(&self, relative_level: u32, morton_id: u64) -> bool {
         self.is_available(relative_level, morton_id, &self.tile_availability)
     }
 
+    /// Mark a quadtree tile available/unavailable, given the ID of the subtree containing it.
     pub fn set_tile_available_quad(
         &mut self,
         subtree_id: QuadtreeTileId,
@@ -300,6 +318,7 @@ impl SubtreeAvailability {
         self.set_available(relative.level, relative.morton_index(), available, false);
     }
 
+    /// Mark an octree tile available/unavailable, given the ID of the subtree containing it.
     pub fn set_tile_available_oct(
         &mut self,
         subtree_id: OctreeTileId,
@@ -310,10 +329,12 @@ impl SubtreeAvailability {
         self.set_available(relative.level, relative.morton_index(), available, false);
     }
 
+    /// Mark a tile available/unavailable at a relative level and Morton index.
     pub fn set_tile_available(&mut self, relative_level: u32, morton_id: u64, available: bool) {
         self.set_available(relative_level, morton_id, available, false);
     }
 
+    /// Content availability for a quadtree tile's `content_id`-th content.
     pub fn is_content_available_quad(
         &self,
         subtree_id: QuadtreeTileId,
@@ -324,6 +345,7 @@ impl SubtreeAvailability {
         self.is_content_available(relative.level, relative.morton_index(), content_id)
     }
 
+    /// Content availability for an octree tile's `content_id`-th content.
     pub fn is_content_available_oct(
         &self,
         subtree_id: OctreeTileId,
@@ -334,6 +356,7 @@ impl SubtreeAvailability {
         self.is_content_available(relative.level, relative.morton_index(), content_id)
     }
 
+    /// Content availability at a relative level, Morton index, and content index.
     pub fn is_content_available(
         &self,
         relative_level: u32,
@@ -352,6 +375,7 @@ impl SubtreeAvailability {
         self.child_subtree_availability.is_set(relative_morton_id)
     }
 
+    /// Child-subtree availability by quadtree tile IDs.
     pub fn is_child_subtree_available_quad(
         &self,
         this_subtree_id: QuadtreeTileId,
@@ -361,6 +385,7 @@ impl SubtreeAvailability {
         self.is_child_subtree_available(morton)
     }
 
+    /// Child-subtree availability by octree tile IDs.
     pub fn is_child_subtree_available_oct(
         &self,
         this_subtree_id: OctreeTileId,
@@ -370,6 +395,7 @@ impl SubtreeAvailability {
         self.is_child_subtree_available(morton)
     }
 
+    /// Mark the child subtree at a relative Morton index available/unavailable.
     pub fn set_child_subtree_available(&mut self, relative_morton_id: u64, available: bool) {
         // For child-subtree availability: the layout is a flat bitstream
         // (conceptually level 0 of the *next* subtree level), so prefix = 0.
