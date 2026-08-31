@@ -1,10 +1,7 @@
 //! Parse `tileset.json` eagerly, or process it with one
 //! bounded-memory streaming fold.
 
-use crate::{
-    Content, ExtMeshFeatures, Tile, Tileset,
-    uri::{Uri, UriLoadError},
-};
+use crate::{Content, Error, ExtMeshFeatures, Extension, Tile, Tileset, Uri};
 use serde::de::{DeserializeSeed, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde_json::Value as JsonValue;
 use std::cell::RefCell;
@@ -47,43 +44,28 @@ pub trait TilesetFold {
 }
 
 /// Fetches and parses a tileset through a caller-owned closure.
-pub fn load<F, E>(uri: impl Into<Uri>, fetch: &mut F) -> Result<Tileset, UriLoadError<E>>
+pub fn load<F, E>(uri: impl Into<Uri>, fetch: &mut F) -> Result<Tileset, Error>
 where
     F: FnMut(&str) -> Result<Vec<u8>, E>,
-    E: std::error::Error + 'static,
+    E: std::error::Error + Send + Sync + 'static,
 {
     let uri = uri.into();
-    let bytes = fetch(&uri.to_string()).map_err(|source| UriLoadError::Fetch {
-        uri: uri.to_string(),
-        source,
-    })?;
-    from_slice(&bytes).map_err(|source| UriLoadError::Parse {
-        uri: uri.to_string(),
-        source,
-    })
+    let bytes = fetch(&uri.to_string()).map_err(|source| Error::fetch(uri.to_string(), source))?;
+    from_slice(&bytes).map_err(|source| Error::tile_parse(uri.to_string(), source))
 }
 
 /// Asynchronously fetches and parses a tileset through a caller-owned closure.
-pub async fn load_async<F, Fut, E>(
-    uri: impl Into<Uri>,
-    fetch: &mut F,
-) -> Result<Tileset, UriLoadError<E>>
+pub async fn load_async<F, Fut, E>(uri: impl Into<Uri>, fetch: &mut F) -> Result<Tileset, Error>
 where
     F: FnMut(&str) -> Fut,
     Fut: Future<Output = Result<Vec<u8>, E>>,
-    E: std::error::Error + 'static,
+    E: std::error::Error + Send + Sync + 'static,
 {
     let uri = uri.into();
     let bytes = fetch(&uri.to_string())
         .await
-        .map_err(|source| UriLoadError::Fetch {
-            uri: uri.to_string(),
-            source,
-        })?;
-    from_slice(&bytes).map_err(|source| UriLoadError::Parse {
-        uri: uri.to_string(),
-        source,
-    })
+        .map_err(|source| Error::fetch(uri.to_string(), source))?;
+    from_slice(&bytes).map_err(|source| Error::tile_parse(uri.to_string(), source))
 }
 
 /// Parses and validates a tileset from a raw JSON byte slice.
@@ -555,9 +537,9 @@ fn validate(tileset: &Tileset) -> Result<(), TileParseError> {
             );
         }
 
-        if ext == ExtMeshFeatures::EXTENSION_NAME
+        if ext == ExtMeshFeatures::NAME
             && let Some(content) = &tileset.root.content
-            && let Some(value) = content.extensions.get(ExtMeshFeatures::EXTENSION_NAME)
+            && let Some(value) = content.extensions.get(ExtMeshFeatures::NAME)
             && let Some(emf) = ExtMeshFeatures::from_json(value)
         {
             for fid in &emf.feature_ids {

@@ -11,12 +11,13 @@ use std::io;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// Failed to fetch a resource.
-    #[error("failed to fetch {uri}: {reason}")]
+    #[error("failed to fetch {uri}: {source}")]
     Fetch {
         /// The URI that could not be fetched.
         uri: String,
-        /// Human-readable failure detail.
-        reason: String,
+        /// The underlying transport error.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
     },
 
     /// Failed to parse tileset JSON.
@@ -38,8 +39,12 @@ pub enum Error {
     Io(#[from] io::Error),
 
     /// User's visitor callback failed.
-    #[error("tile visitor failed: {0}")]
-    VisitorFailed(String),
+    #[error("tile visitor failed: {source}")]
+    VisitorFailed {
+        /// The error returned by the visitor.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
 
     /// External tileset cycle detected during traversal.
     #[error("external tileset cycle detected at {uri}")]
@@ -47,23 +52,17 @@ pub enum Error {
         /// The URI where the cycle was detected.
         uri: String,
     },
-
-    /// URI parsing or resolution failed.
-    #[error("invalid URI {uri}: {reason}")]
-    InvalidUri {
-        /// The malformed URI.
-        uri: String,
-        /// Human-readable failure detail.
-        reason: String,
-    },
 }
 
 impl Error {
-    /// Create a fetch error with the given URI and reason.
-    pub fn fetch(uri: impl Into<String>, reason: impl Into<String>) -> Self {
+    /// Create a fetch error from an underlying transport error.
+    pub fn fetch(
+        uri: impl Into<String>,
+        source: impl std::error::Error + Send + Sync + 'static,
+    ) -> Self {
         Error::Fetch {
             uri: uri.into(),
-            reason: reason.into(),
+            source: Box::new(source),
         }
     }
 
@@ -75,21 +74,15 @@ impl Error {
         }
     }
 
-    /// Create a visitor error from a Display-able type.
-    pub fn visitor(reason: impl std::fmt::Display) -> Self {
-        Error::VisitorFailed(reason.to_string())
+    /// Create a visitor error from the error the visitor returned.
+    pub fn visitor(source: impl std::error::Error + Send + Sync + 'static) -> Self {
+        Error::VisitorFailed {
+            source: Box::new(source),
+        }
     }
 
     /// Create an external cycle error.
     pub fn external_cycle(uri: impl Into<String>) -> Self {
         Error::ExternalCycle { uri: uri.into() }
-    }
-
-    /// Create an invalid URI error.
-    pub fn invalid_uri(uri: impl Into<String>, reason: impl Into<String>) -> Self {
-        Error::InvalidUri {
-            uri: uri.into(),
-            reason: reason.into(),
-        }
     }
 }

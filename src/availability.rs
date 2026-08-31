@@ -22,7 +22,6 @@
 //! and `bit_index = morton_id` directly (the root of each potential child
 //! subtree is one level below the bottom of the current subtree).
 
-// Re-export SubdivisionScheme so existing code using `crate::availability::SubdivisionScheme` works.
 use crate::generated::SubdivisionScheme;
 
 /// Quadtree tile coordinates — local to avoid external math-library deps.

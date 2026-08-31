@@ -101,18 +101,15 @@ mod traversal;
 mod uri;
 mod writer;
 
-pub use generated::*;
-
-// Primary unified error type
-pub use error::Error;
-
 pub use availability::{
     AvailabilityNode, AvailabilityView, OctreeAvailability, OctreeAvailabilityNode, OctreeTileId,
     QuadtreeAvailability, QuadtreeTileId, SubtreeAvailability, TileAvailabilityFlags,
 };
+pub use error::Error;
 pub use extension::{
     EsriCrs, EsriCrsTransform, ExtMeshFeatures, ExtMeshFeaturesFeatureId, Extension, HasExtensions,
 };
+pub use generated::*;
 pub use metadata_query::{FoundMetadataProperty, MetadataQuery};
 pub use reader::{
     TileParseError, fold_from_reader, from_reader, from_slice, from_str, load, load_async,
@@ -125,7 +122,3 @@ pub use writer::{
     SchemaWriter, SchemaWriterResult, SubtreeWriter, SubtreeWriterResult, TilesetWriter,
     TilesetWriterResult, WriteOptions,
 };
-
-// Legacy error types for backward compatibility during transition
-pub use traversal::WalkError;
-pub use uri::UriLoadError;

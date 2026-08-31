@@ -9,32 +9,8 @@
 //! location a string represents, then resolving relative references using
 //! that kind's own rules rather than re-guessing on every call.
 
-use crate::reader::TileParseError;
 use typed_path::{Utf8Encoding, Utf8PathBuf, Utf8TypedPath, Utf8UnixPathBuf, Utf8WindowsPathBuf};
 use url::Url;
-
-/// A resource-loading failure while loading a tileset by URI.
-#[derive(Debug, thiserror::Error)]
-pub enum UriLoadError<E: std::error::Error + 'static> {
-    /// The URI could not be fetched by the caller's closure.
-    #[error("failed to fetch {uri}: {source}")]
-    Fetch {
-        /// The URI that could not be fetched.
-        uri: String,
-        /// The underlying transport error.
-        #[source]
-        source: E,
-    },
-    /// The fetched bytes could not be parsed as a tileset.
-    #[error("failed to parse {uri}: {source}")]
-    Parse {
-        /// The URI of the unparseable tileset.
-        uri: String,
-        /// The underlying parse error.
-        #[source]
-        source: TileParseError,
-    },
-}
 
 /// Returns `true` if the given URI refers to an external tileset.
 ///

@@ -1,5 +1,6 @@
 //! Generic traversal engine with implicit expanders, no lazy-json dependency.
 
+use crate::Error;
 use crate::availability::{
     OctreeAvailability, OctreeTileId, QuadtreeAvailability, QuadtreeTileId, TileAvailabilityFlags,
 };
@@ -10,7 +11,7 @@ use crate::subtree::parse_subtree;
 use crate::uri::{Uri, is_external_tileset_uri};
 use std::collections::HashSet;
 
-/// Column-major 4x4 matrix in 64.
+/// Column-major 4x4 matrix in f64.
 pub type Mat4d = [f64; 16];
 
 /// Control flow for node visitors.
@@ -48,38 +49,6 @@ fn identity_transform() -> Mat4d {
     [
         1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
     ]
-}
-
-/// Failure returned by the high-level tile walker.
-#[derive(Debug, thiserror::Error)]
-pub enum WalkError<E: std::error::Error + 'static> {
-    /// A resource could not be fetched by the caller's closure.
-    #[error("failed to fetch {uri}: {source}")]
-    Fetch {
-        /// The URI that could not be fetched.
-        uri: String,
-        /// The underlying transport error.
-        #[source]
-        source: E,
-    },
-    /// A fetched tileset could not be parsed.
-    #[error("failed to parse tileset {uri}: {source}")]
-    Parse {
-        /// The URI of the unparseable tileset.
-        uri: String,
-        /// The underlying parse error.
-        #[source]
-        source: TileParseError,
-    },
-    /// The caller's visitor returned an error.
-    #[error("tile visitor failed: {0}")]
-    Visit(#[source] E),
-    /// An external tileset was referenced while already being visited.
-    #[error("external tileset cycle detected at {uri}")]
-    ExternalCycle {
-        /// The URI where the cycle was detected.
-        uri: String,
-    },
 }
 
 /// A tile and the resolved transform state at the point it is visited.
@@ -132,25 +101,17 @@ fn external_uris(tile: &Tile) -> impl Iterator<Item = &str> {
 ///
 /// The fetch closure receives resolved resource URIs. The visitor receives
 /// each complete source tile before its descendants are expanded.
-pub fn walk<F, V, E>(
-    root_uri: impl Into<Uri>,
-    fetch: &mut F,
-    mut visit: V,
-) -> Result<(), WalkError<E>>
+pub fn walk<F, V, E>(root_uri: impl Into<Uri>, fetch: &mut F, mut visit: V) -> Result<(), Error>
 where
     F: FnMut(&str) -> Result<Vec<u8>, E>,
     V: FnMut(&mut TileVisit<'_>) -> Result<TraversalControl, E>,
-    E: std::error::Error + 'static,
+    E: std::error::Error + Send + Sync + 'static,
 {
     let root_uri = root_uri.into();
-    let bytes = fetch(&root_uri.to_string()).map_err(|source| WalkError::Fetch {
-        uri: root_uri.to_string(),
-        source,
-    })?;
-    let tileset = from_slice(&bytes).map_err(|source| WalkError::Parse {
-        uri: root_uri.to_string(),
-        source,
-    })?;
+    let bytes = fetch(&root_uri.to_string())
+        .map_err(|source| Error::fetch(root_uri.to_string(), source))?;
+    let tileset =
+        from_slice(&bytes).map_err(|source| Error::tile_parse(root_uri.to_string(), source))?;
     let mut active_sources = HashSet::new();
     active_sources.insert(root_uri.to_string());
     walk_tile(
@@ -177,11 +138,11 @@ fn walk_tile<F, V, E>(
     active_sources: &mut HashSet<String>,
     fetch: &mut F,
     visit: &mut V,
-) -> Result<(), WalkError<E>>
+) -> Result<(), Error>
 where
     F: FnMut(&str) -> Result<Vec<u8>, E>,
     V: FnMut(&mut TileVisit<'_>) -> Result<TraversalControl, E>,
-    E: std::error::Error + 'static,
+    E: std::error::Error + Send + Sync + 'static,
 {
     let mut tile_visit = TileVisit {
         tile,
@@ -192,7 +153,7 @@ where
         core_local_transform: tile.transform,
         local_transform: tile.transform,
     };
-    let control = visit(&mut tile_visit).map_err(WalkError::Visit)?;
+    let control = visit(&mut tile_visit).map_err(Error::visitor)?;
     if !matches!(control, TraversalControl::Continue) {
         return Ok(());
     }
@@ -229,17 +190,13 @@ where
         let resolved_uri = source_uri.resolve(relative_uri);
         let resolved_key = resolved_uri.to_string();
         if !active_sources.insert(resolved_key.clone()) {
-            return Err(WalkError::ExternalCycle { uri: resolved_key });
+            return Err(Error::external_cycle(resolved_key));
         }
         let result = (|| {
-            let bytes = fetch(&resolved_uri.to_string()).map_err(|source| WalkError::Fetch {
-                uri: resolved_key.clone(),
-                source,
-            })?;
-            let tileset = from_slice(&bytes).map_err(|source| WalkError::Parse {
-                uri: resolved_key.clone(),
-                source,
-            })?;
+            let bytes = fetch(&resolved_uri.to_string())
+                .map_err(|source| Error::fetch(resolved_key.clone(), source))?;
+            let tileset = from_slice(&bytes)
+                .map_err(|source| Error::tile_parse(resolved_key.clone(), source))?;
             walk_tile(
                 &tileset.root,
                 &resolved_uri,
@@ -269,11 +226,11 @@ fn walk_implicit_tile<F, V, E>(
     _active_sources: &mut HashSet<String>,
     fetch: &mut F,
     visit: &mut V,
-) -> Result<(), WalkError<E>>
+) -> Result<(), Error>
 where
     F: FnMut(&str) -> Result<Vec<u8>, E>,
     V: FnMut(&mut TileVisit<'_>) -> Result<TraversalControl, E>,
-    E: std::error::Error + 'static,
+    E: std::error::Error + Send + Sync + 'static,
 {
     let content_template = tile
         .content
@@ -308,16 +265,11 @@ where
                             .id
                             .subtree_root(expander.subtree_levels)
                             .resolve_url(source_uri, &expander.subtree_uri_template);
-                        let bytes = fetch(&uri.to_string()).map_err(|source| WalkError::Fetch {
-                            uri: uri.to_string(),
-                            source,
-                        })?;
+                        let bytes = fetch(&uri.to_string())
+                            .map_err(|source| Error::fetch(uri.to_string(), source))?;
                         expander
                             .register_subtree(node.id.subtree_root(expander.subtree_levels), &bytes)
-                            .map_err(|source| WalkError::Parse {
-                                uri: uri.to_string(),
-                                source,
-                            })?;
+                            .map_err(|source| Error::tile_parse(uri.to_string(), source))?;
                         stack.push(node);
                     }
                     ExpansionResult::Ready(children) => {
@@ -343,7 +295,7 @@ where
                                 core_local_transform: identity_transform(),
                                 local_transform: identity_transform(),
                             };
-                            match visit(&mut tile_visit).map_err(WalkError::Visit)? {
+                            match visit(&mut tile_visit).map_err(Error::visitor)? {
                                 TraversalControl::Continue => stack.push(child),
                                 TraversalControl::SkipChildren => {}
                                 TraversalControl::Stop => return Ok(()),
@@ -376,16 +328,11 @@ where
                             .id
                             .subtree_root(expander.subtree_levels)
                             .resolve_url(source_uri, &expander.subtree_uri_template);
-                        let bytes = fetch(&uri.to_string()).map_err(|source| WalkError::Fetch {
-                            uri: uri.to_string(),
-                            source,
-                        })?;
+                        let bytes = fetch(&uri.to_string())
+                            .map_err(|source| Error::fetch(uri.to_string(), source))?;
                         expander
                             .register_subtree(node.id.subtree_root(expander.subtree_levels), &bytes)
-                            .map_err(|source| WalkError::Parse {
-                                uri: uri.to_string(),
-                                source,
-                            })?;
+                            .map_err(|source| Error::tile_parse(uri.to_string(), source))?;
                         stack.push(node);
                     }
                     ExpansionResult::Ready(children) => {
@@ -411,7 +358,7 @@ where
                                 core_local_transform: identity_transform(),
                                 local_transform: identity_transform(),
                             };
-                            match visit(&mut tile_visit).map_err(WalkError::Visit)? {
+                            match visit(&mut tile_visit).map_err(Error::visitor)? {
                                 TraversalControl::Continue => stack.push(child),
                                 TraversalControl::SkipChildren => {}
                                 TraversalControl::Stop => return Ok(()),
