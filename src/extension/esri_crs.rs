@@ -22,14 +22,6 @@ pub struct EsriCrs {
 }
 
 impl EsriCrs {
-    /// The EPSG code string, e.g. `"EPSG:4326"` or `"EPSG:4326+EPSG:5703"`.
-    pub fn epsg(&self) -> String {
-        match self.vcs_wkid {
-            Some(vcs) => format!("EPSG:{}+EPSG:{}", self.wkid, vcs),
-            None => format!("EPSG:{}", self.wkid),
-        }
-    }
-
     /// The WKT definition, preferring `wkt` over `wkt2`.
     pub fn wkt(&self) -> Option<&str> {
         if let Some(wkt) = &self.wkt {
@@ -70,7 +62,7 @@ pub struct EsriCrsTransform {
 
 impl EsriCrsTransform {
     /// Returns `false` when a region bounding volume is set (not supported
-    /// for CRS transforms).
+    /// for ESRI_crs transforms).
     pub fn is_valid(&self) -> bool {
         if let Some(bv) = &self.bounding_volume
             && bv.region.is_some()
