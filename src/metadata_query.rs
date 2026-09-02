@@ -12,7 +12,7 @@
 //! assert!(hit.is_none()); // empty schema -> no match
 //! ```
 
-use crate::generated::{AnyValue, Class, ClassProperty, MetadataEntity, Schema};
+use crate::generated::{Class, ClassProperty, MetadataEntity, Schema, Value};
 
 /// A property found by [`MetadataQuery::find_first_property_with_semantic`].
 #[derive(Debug)]
@@ -26,7 +26,7 @@ pub struct FoundMetadataProperty<'a> {
     /// The property definition.
     pub property_def: &'a ClassProperty,
     /// The value stored for this property in the entity, if present.
-    pub value: Option<&'a AnyValue>,
+    pub value: Option<&'a Value>,
 }
 
 /// Static helpers for querying 3D Tiles metadata.

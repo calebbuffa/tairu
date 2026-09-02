@@ -1,4 +1,6 @@
 {
+    "extensible": true,
+    "extensionTrait": "crate::HasExtensions",
     "classes": {
         "3D Tiles property": {
             "skip": true

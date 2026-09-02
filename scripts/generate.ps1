@@ -56,7 +56,8 @@ Write-Host ""
 $arguments = @(
     "--schema", $SchemaFile,
     "--config", $ConfigFile,
-    "--output", $OutputDir
+    "--output", $OutputDir,
+    "--manifest"
 )
 
 if ($Check) {
@@ -75,7 +76,7 @@ if ($LASTEXITCODE -eq 0) {
     else {
         Write-Host "3D Tiles types regenerated successfully!" -ForegroundColor Green
         Write-Host "  Output: $(Join-Path $OutputDir 'generated.rs')"
-        Write-Host "  Manifest: $(Join-Path $Root 'MANIFEST.md')"
+        Write-Host "  Manifest: $(Join-Path $OutputDir 'MANIFEST.md')"
     }
 }
 else {
