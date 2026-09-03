@@ -1,6 +1,6 @@
 //! Typed structs for the EXT_mesh_features glTF extension.
 //!
-//! Reference: https://github.com/CesiumGS/glTF/tree/proposal-EXT_mesh_features
+//! Reference: <https://github.com/CesiumGS/glTF/tree/proposal-EXT_mesh_features>
 
 /// The `EXT_mesh_features` extension name.
 const EXTENSION_NAME: &str = "EXT_mesh_features";

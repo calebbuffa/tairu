@@ -12,18 +12,26 @@ impl Tile {
     /// pre-order) including `self`.
     ///
     /// The callback receives a shared reference to each [`Tile`].
-    pub fn for_each_tile<F: FnMut(&Tile)>(&self, f: &mut F) {
+    pub fn for_each_tile<F: FnMut(&Tile)>(&self, mut f: F) {
+        self.for_each_tile_with(&mut f);
+    }
+
+    fn for_each_tile_with(&self, f: &mut dyn FnMut(&Tile)) {
         f(self);
         for child in &self.children {
-            child.for_each_tile(f);
+            child.for_each_tile_with(f);
         }
     }
 
     /// Mutable variant of [`for_each_tile`](Self::for_each_tile).
-    pub fn for_each_tile_mut<F: FnMut(&mut Tile)>(&mut self, f: &mut F) {
+    pub fn for_each_tile_mut<F: FnMut(&mut Tile)>(&mut self, mut f: F) {
+        self.for_each_tile_mut_with(&mut f);
+    }
+
+    fn for_each_tile_mut_with(&mut self, f: &mut dyn FnMut(&mut Tile)) {
         f(self);
         for child in &mut self.children {
-            child.for_each_tile_mut(f);
+            child.for_each_tile_mut_with(f);
         }
     }
 
@@ -31,7 +39,11 @@ impl Tile {
     /// (depth-first, pre-order).
     ///
     /// Both `tile.content` (single) and `tile.contents` (multi) are visited.
-    pub fn for_each_content<F: FnMut(&Content)>(&self, f: &mut F) {
+    pub fn for_each_content<F: FnMut(&Content)>(&self, mut f: F) {
+        self.for_each_content_with(&mut f);
+    }
+
+    fn for_each_content_with(&self, f: &mut dyn FnMut(&Content)) {
         if let Some(c) = &self.content {
             f(c);
         }
@@ -39,12 +51,16 @@ impl Tile {
             f(c);
         }
         for child in &self.children {
-            child.for_each_content(f);
+            child.for_each_content_with(f);
         }
     }
 
     /// Mutable variant of [`for_each_content`](Self::for_each_content).
-    pub fn for_each_content_mut<F: FnMut(&mut Content)>(&mut self, f: &mut F) {
+    pub fn for_each_content_mut<F: FnMut(&mut Content)>(&mut self, mut f: F) {
+        self.for_each_content_mut_with(&mut f);
+    }
+
+    fn for_each_content_mut_with(&mut self, f: &mut dyn FnMut(&mut Content)) {
         if let Some(c) = &mut self.content {
             f(c);
         }
@@ -52,7 +68,7 @@ impl Tile {
             f(c);
         }
         for child in &mut self.children {
-            child.for_each_content_mut(f);
+            child.for_each_content_mut_with(f);
         }
     }
 

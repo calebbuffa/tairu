@@ -119,8 +119,8 @@
             "extraFields": [
                 {
                     "name": "data",
-                    "rustType": "Vec<u8>",
-                    "defaultExpr": "Vec::new()",
+                    "rustType": "bytes::Bytes",
+                    "defaultExpr": "bytes::Bytes::new()",
                     "skipSerde": true
                 }
             ]
@@ -130,8 +130,8 @@
             "extraFields": [
                 {
                     "name": "data",
-                    "rustType": "Vec<u8>",
-                    "defaultExpr": "Vec::new()",
+                    "rustType": "bytes::Bytes",
+                    "defaultExpr": "bytes::Bytes::new()",
                     "skipSerde": true
                 }
             ]

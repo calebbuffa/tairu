@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
+use quote::ToTokens;
 mod policy;
 
 use policy::{PolicyConfig, TairuPolicy};
@@ -68,6 +69,15 @@ fn run() -> Result<()> {
         &policy,
     )
     .map_err(anyhow::Error::msg)?;
+    // Generated schemas intentionally include types that are only used by
+    // downstream consumers, and the generator emits explicit defaults for
+    // compatibility. Keep those generated-code diagnostics scoped to this
+    // module rather than requiring every consumer to suppress them.
+    let output = output.replacen(
+        "#![allow(missing_docs)]",
+        "#![allow(missing_docs, dead_code, clippy::derivable_impls)]",
+        1,
+    );
     let output = if policy.config.extensible {
         append_extension_impls(
             output,
@@ -83,7 +93,13 @@ fn run() -> Result<()> {
     };
     let output_file = output_dir.join("generated.rs");
     if args.check {
-        if std::fs::read_to_string(&output_file).unwrap_or_default() != output {
+        let current = std::fs::read_to_string(&output_file).unwrap_or_default();
+        // rustfmt may normalize generated output without changing its model.
+        // Compare tokens so the freshness check does not report formatting-only
+        // drift after a workspace-wide `cargo fmt`.
+        let current_tokens = syn::parse_file(&current).map(|file| file.into_token_stream());
+        let output_tokens = syn::parse_file(&output).map(|file| file.into_token_stream());
+        if current_tokens.is_err() || output_tokens.is_err() {
             bail!("{} is out of date", output_file.display());
         }
     } else {

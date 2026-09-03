@@ -1,5 +1,5 @@
 //!Generated 3D Tiles data model. Do not edit.
-#![allow(missing_docs)]
+#![allow(missing_docs, dead_code, clippy::derivable_impls)]
 use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Refine {
@@ -299,7 +299,7 @@ pub struct Buffer {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uri: Option<String>,
     #[serde(skip)]
-    pub data: Vec<u8>,
+    pub data: bytes::Bytes,
     ///Extension-specific data.
     #[serde(default)]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,

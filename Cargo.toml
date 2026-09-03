@@ -6,6 +6,7 @@ version = "0.1.0"
 license = "Apache-2.0"
 repository = "https://github.com/calebbuffa/tairu"
 readme = "README.md"
+exclude = ["extern/3d-tiles/**"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -15,10 +16,11 @@ members = ["xtask"]
 resolver = "3"
 
 [dependencies]
+kiba = { git = "https://github.com/calebbuffa/kiba" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+bytes = "1"
 log = "0.4"
 thiserror = "2"
 url = "2"
 typed-path = "0.12"
-glam = { version = "0.33", features = ["serde"] }

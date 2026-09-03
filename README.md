@@ -5,10 +5,10 @@
 ## Features
 
 - **Generated types** — auto-generated Rust structs covering the full 3D Tiles JSON schema.
-- **Parsing** — parse and validate `tileset.json` from slices, strings, or readers (`from_slice`, `from_str`, `from_reader`), plus a bounded-memory streaming fold (`fold_from_reader`).
+- **Parsing** — parse and validate `tileset.json` from slices, strings, or readers (`from_slice`, `from_str`, `from_reader`), returning the crate-wide `Error`.
 - **Traversal** — walk a tileset, including external tilesets with cycle detection, with resolved world transforms (`walk`, `TileVisit`).
-- **Implicit tiling** — quadtree/octree availability with Morton-index random access (`QuadtreeAvailability`, `OctreeAvailability`, `SubtreeAvailability`), and binary/JSON subtree parsing (`parse_subtree`).
-- **Writing** — serialize tilesets, subtrees, and metadata schemas (`TilesetWriter`, `SubtreeWriter`, `SchemaWriter`).
+- **Implicit tiling** — quadtree/octree availability with Morton-index random access (`QuadtreeAvailability`, `OctreeAvailability`, `SubtreeAvailability`), and binary/JSON subtree parsing through `SubtreeAvailability::from_bytes`.
+- **Writing** — serialize tilesets, subtrees, and metadata schemas (`TilesetWriter`, `SubtreeWriter`, `SchemaWriter`) with idiomatic `Result<Vec<u8>, Error>` APIs.
 - **Typed extensions** — read/write vendor extensions as typed values (`Extension`, `HasExtensions`).
 
 ## Quick start
@@ -38,4 +38,3 @@ assert_eq!(uris, ["root.b3dm"]);
 ## License
 
 Apache License 2.0, see [LICENSE](LICENSE) for details.
-

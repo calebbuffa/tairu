@@ -4,7 +4,7 @@ mod ext_mesh_features;
 pub use esri_crs::*;
 pub use ext_mesh_features::*;
 
-use crate::reader::TileParseError;
+use crate::Error;
 use serde::{Serialize, de::DeserializeOwned};
 
 /// Trait for types that represent a named 3D Tiles extension payload.
@@ -22,16 +22,15 @@ pub trait HasExtensions {
     fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value>;
 
     /// Deserialize extension payload by type.
-    fn extension<E: Extension>(&self) -> Result<Option<E>, TileParseError> {
+    fn extension<E: Extension>(&self) -> Result<Option<E>, Error> {
         match self.extensions().get(E::NAME) {
             Some(value) => serde_json::from_value(value.clone())
                 .map(Some)
                 .map_err(|error| {
-                    TileParseError::Validation(format!(
-                        "failed to decode extension {}: {}",
-                        E::NAME,
-                        error
-                    ))
+                    Error::parse(
+                        "<extension>",
+                        format!("failed to decode extension {}: {}", E::NAME, error),
+                    )
                 }),
             None => Ok(None),
         }
@@ -43,9 +42,12 @@ pub trait HasExtensions {
     }
 
     /// Encode and insert extension payload by type.
-    fn set_extension<E: Extension>(&mut self, ext: E) -> Result<(), TileParseError> {
+    fn set_extension<E: Extension>(&mut self, ext: E) -> Result<(), Error> {
         let value = serde_json::to_value(ext).map_err(|error| {
-            TileParseError::Validation(format!("failed to encode extension {}: {}", E::NAME, error))
+            Error::parse(
+                "<extension>",
+                format!("failed to encode extension {}: {}", E::NAME, error),
+            )
         })?;
         self.extensions_mut().insert(E::NAME.to_string(), value);
         Ok(())
@@ -87,7 +89,7 @@ mod tests {
             serde_json::json!({"wrong": true}),
         );
         let err = tile.extension::<TestExt>().expect_err("decode should fail");
-        assert!(matches!(err, TileParseError::Validation(_)));
+        assert!(matches!(err, Error::Parse { .. }));
     }
 
     #[test]

@@ -59,6 +59,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "bytes"
+version = "1.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
+
+[[package]]
 name = "clap"
 version = "4.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -128,15 +134,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
-]
-
-[[package]]
-name = "glam"
-version = "0.33.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21fef0953c54fd3de2f44b743fbf77e044c81a25faee03636dfccc0d35135e23"
-dependencies = [
- "serde_core",
 ]
 
 [[package]]
@@ -276,6 +273,14 @@ name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
+
+[[package]]
+name = "kiba"
+version = "0.1.0"
+source = "git+https://github.com/calebbuffa/kiba#7a3556816062fa3184a65267234a191af145287a"
+dependencies = [
+ "thiserror",
+]
 
 [[package]]
 name = "litemap"
@@ -469,7 +474,8 @@ dependencies = [
 name = "tairu"
 version = "0.1.0"
 dependencies = [
- "glam",
+ "bytes",
+ "kiba",
  "log",
  "serde",
  "serde_json",

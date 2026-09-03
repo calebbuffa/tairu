@@ -1,4 +1,4 @@
-use crate::availability::{OctreeTileId, QuadtreeTileId};
+use super::{OctreeTileId, QuadtreeTileId};
 use crate::generated::BoundingVolume;
 use crate::uri::Uri;
 
@@ -105,19 +105,50 @@ fn level_denominator(level: u32) -> f64 {
     (1u64 << level) as f64
 }
 
+#[derive(Clone, Copy)]
+struct Vec3 {
+    x: f64,
+    y: f64,
+    z: f64,
+}
+
+impl Vec3 {
+    fn new(x: f64, y: f64, z: f64) -> Self {
+        Self { x, y, z }
+    }
+
+    fn add(self, other: Self) -> Self {
+        Self::new(self.x + other.x, self.y + other.y, self.z + other.z)
+    }
+
+    fn sub(self, other: Self) -> Self {
+        Self::new(self.x - other.x, self.y - other.y, self.z - other.z)
+    }
+
+    fn scale(self, factor: f64) -> Self {
+        Self::new(self.x * factor, self.y * factor, self.z * factor)
+    }
+
+    fn length(self) -> f64 {
+        self.x.hypot(self.y).hypot(self.z)
+    }
+}
+
 // 3D Tiles `box` layout: [cx, cy, cz, xhx, xhy, xhz, yhx, yhy, yhz, zhx, zhy, zhz]
 fn subdivide_obb_quad(b: &[f64], tx: u32, ty: u32, d: f64) -> [f64; 12] {
-    use glam::DVec3;
-    let center = DVec3::new(b[0], b[1], b[2]);
-    let xh = DVec3::new(b[3], b[4], b[5]);
-    let yh = DVec3::new(b[6], b[7], b[8]);
-    let zh = DVec3::new(b[9], b[10], b[11]);
-    let xd = xh * 2.0 / d;
-    let yd = yh * 2.0 / d;
-    let min = center - xh - yh - zh;
-    let child_center = min + xd * (tx as f64 + 0.5) + yd * (ty as f64 + 0.5) + zh;
-    let new_xh = xd * 0.5;
-    let new_yh = yd * 0.5;
+    let center = Vec3::new(b[0], b[1], b[2]);
+    let xh = Vec3::new(b[3], b[4], b[5]);
+    let yh = Vec3::new(b[6], b[7], b[8]);
+    let zh = Vec3::new(b[9], b[10], b[11]);
+    let xd = xh.scale(2.0 / d);
+    let yd = yh.scale(2.0 / d);
+    let min = center.sub(xh).sub(yh).sub(zh);
+    let child_center = min
+        .add(xd.scale(tx as f64 + 0.5))
+        .add(yd.scale(ty as f64 + 0.5))
+        .add(zh);
+    let new_xh = xd.scale(0.5);
+    let new_yh = yd.scale(0.5);
     [
         child_center.x,
         child_center.y,
@@ -135,18 +166,19 @@ fn subdivide_obb_quad(b: &[f64], tx: u32, ty: u32, d: f64) -> [f64; 12] {
 }
 
 fn subdivide_obb_oct(b: &[f64], tx: u32, ty: u32, tz: u32, d: f64) -> [f64; 12] {
-    use glam::DVec3;
-    let center = DVec3::new(b[0], b[1], b[2]);
-    let xh = DVec3::new(b[3], b[4], b[5]);
-    let yh = DVec3::new(b[6], b[7], b[8]);
-    let zh = DVec3::new(b[9], b[10], b[11]);
-    let xd = xh * 2.0 / d;
-    let yd = yh * 2.0 / d;
-    let zd = zh * 2.0 / d;
-    let min = center - xh - yh - zh;
-    let child_center =
-        min + xd * (tx as f64 + 0.5) + yd * (ty as f64 + 0.5) + zd * (tz as f64 + 0.5);
-    let (new_xh, new_yh, new_zh) = (xd * 0.5, yd * 0.5, zd * 0.5);
+    let center = Vec3::new(b[0], b[1], b[2]);
+    let xh = Vec3::new(b[3], b[4], b[5]);
+    let yh = Vec3::new(b[6], b[7], b[8]);
+    let zh = Vec3::new(b[9], b[10], b[11]);
+    let xd = xh.scale(2.0 / d);
+    let yd = yh.scale(2.0 / d);
+    let zd = zh.scale(2.0 / d);
+    let min = center.sub(xh).sub(yh).sub(zh);
+    let child_center = min
+        .add(xd.scale(tx as f64 + 0.5))
+        .add(yd.scale(ty as f64 + 0.5))
+        .add(zd.scale(tz as f64 + 0.5));
+    let (new_xh, new_yh, new_zh) = (xd.scale(0.5), yd.scale(0.5), zd.scale(0.5));
     [
         child_center.x,
         child_center.y,
@@ -171,11 +203,10 @@ fn sphere_to_isotropic_box(s: &[f64]) -> [f64; 12] {
 
 // Minimum bounding sphere of an OBB: center at OBB center, radius = length of half-diagonal.
 fn obb_bounding_sphere(b: &[f64]) -> [f64; 4] {
-    use glam::DVec3;
-    let xh = DVec3::new(b[3], b[4], b[5]);
-    let yh = DVec3::new(b[6], b[7], b[8]);
-    let zh = DVec3::new(b[9], b[10], b[11]);
-    let r = (xh + yh + zh).length();
+    let xh = Vec3::new(b[3], b[4], b[5]);
+    let yh = Vec3::new(b[6], b[7], b[8]);
+    let zh = Vec3::new(b[9], b[10], b[11]);
+    let r = xh.add(yh).add(zh).length();
     [b[0], b[1], b[2], r]
 }
 
@@ -189,7 +220,7 @@ fn expand_tile_url(template: &str, vars: &[(&str, &str)]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::availability::{OctreeTileId, QuadtreeTileId};
+    use super::{OctreeTileId, QuadtreeTileId};
     use crate::uri::Uri;
 
     #[test]
