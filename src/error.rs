@@ -66,6 +66,13 @@ pub enum Error {
         /// Maximum permitted traversal depth.
         max: usize,
     },
+
+    /// The loader encountered an implicit tiling scheme it does not implement.
+    #[error("unsupported implicit subdivision scheme: {scheme}")]
+    UnsupportedImplicitSubdivision {
+        /// The unsupported scheme label.
+        scheme: &'static str,
+    },
 }
 
 impl Error {
@@ -105,5 +112,10 @@ impl Error {
     /// Create an external cycle error.
     pub(crate) fn external_cycle(uri: impl Into<String>) -> Self {
         Error::ExternalCycle { uri: uri.into() }
+    }
+
+    /// Create an unsupported implicit-subdivision error.
+    pub(crate) fn unsupported_implicit_subdivision(scheme: &'static str) -> Self {
+        Error::UnsupportedImplicitSubdivision { scheme }
     }
 }

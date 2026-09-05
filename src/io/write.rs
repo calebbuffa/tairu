@@ -206,7 +206,6 @@ mod tests {
     use super::super::from_slice;
     use super::*;
     use crate::generated::{Asset, Availability, BoundingVolume, Class, Refine, Tile};
-    use std::collections::HashMap;
 
     fn make_tileset() -> Tileset {
         Tileset {
@@ -235,7 +234,7 @@ mod tests {
         let bytes = r.unwrap();
         let result = from_slice(&bytes);
         let ts2 = result.expect("round-trip parse failed");
-        assert_eq!(ts2.asset.version, "1.1");
+        assert_eq!(&*ts2.asset.version, "1.1");
         assert_eq!(ts2.geometric_error, 500.0);
         assert_eq!(ts2.root.refine, Some(Refine::Replace));
     }
@@ -296,23 +295,21 @@ mod tests {
     fn schema_round_trip() {
         let schema = Schema {
             id: "test-schema".into(),
-            classes: {
-                let mut m = HashMap::new();
-                m.insert(
-                    "Building".into(),
-                    Class {
-                        name: Some("Building".into()),
-                        ..Default::default()
-                    },
-                );
-                m
-            },
+            classes: [(
+                "Building".into(),
+                Class {
+                    name: Some("Building".into()),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
             ..Default::default()
         };
         let r = SchemaWriter::write_schema(&schema, WriteOptions::default());
         let bytes = r.unwrap();
         let parsed: Schema = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(parsed.id, "test-schema");
+        assert_eq!(&*parsed.id, "test-schema");
         assert!(parsed.classes.contains_key("Building"));
     }
 }

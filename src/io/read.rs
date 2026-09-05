@@ -53,7 +53,7 @@ fn validate(tileset: &Tileset) -> Result<(), Error> {
                 ext
             );
         }
-        if ext == ExtMeshFeatures::NAME
+        if &**ext == ExtMeshFeatures::NAME
             && let Some(content) = &tileset.root.content
             && let Some(value) = content.extensions.get(ExtMeshFeatures::NAME)
             && let Some(emf) = ExtMeshFeatures::from_json(value)
@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn parses_minimal_tileset() {
         let tileset = from_slice(minimal_json()).unwrap();
-        assert_eq!(tileset.asset.version, "1.1");
+        assert_eq!(&*tileset.asset.version, "1.1");
         assert_eq!(tileset.geometric_error, 100.0);
     }
 

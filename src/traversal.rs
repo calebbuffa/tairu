@@ -63,23 +63,54 @@ fn identity_transform() -> Mat4d {
 }
 
 /// A tile and the resolved transform state at the point it is visited.
+#[non_exhaustive]
 pub struct TileVisit<'a> {
     /// The complete source tile being visited.
-    pub tile: &'a Tile,
+    tile: &'a Tile,
     /// The tileset URI this tile came from.
-    pub source_uri: &'a Uri,
+    source_uri: &'a Uri,
     /// Traversal depth (0 for the root of the top-level tileset).
-    pub depth: usize,
+    depth: usize,
     /// Whether this tile is the root of an external tileset.
-    pub is_external_root: bool,
+    is_external_root: bool,
     /// The accumulated world transform of the parent tile.
-    pub parent_transform: Mat4d,
+    parent_transform: Mat4d,
     /// The tile's own core transform.
-    pub core_local_transform: Mat4d,
+    core_local_transform: Mat4d,
     local_transform: Mat4d,
 }
 
 impl TileVisit<'_> {
+    /// Returns the source tile.
+    pub fn tile(&self) -> &Tile {
+        self.tile
+    }
+
+    /// Returns the tileset URI this tile came from.
+    pub fn source_uri(&self) -> &Uri {
+        self.source_uri
+    }
+
+    /// Returns the traversal depth of this tile.
+    pub fn depth(&self) -> usize {
+        self.depth
+    }
+
+    /// Returns whether this tile is the root of an external tileset.
+    pub fn is_external_root(&self) -> bool {
+        self.is_external_root
+    }
+
+    /// Returns the accumulated world transform of the parent tile.
+    pub fn parent_transform(&self) -> Mat4d {
+        self.parent_transform
+    }
+
+    /// Returns the tile's own core transform.
+    pub fn core_local_transform(&self) -> Mat4d {
+        self.core_local_transform
+    }
+
     /// Returns the effective local transform.
     pub fn local_transform(&self) -> Mat4d {
         self.local_transform
@@ -102,7 +133,7 @@ impl TileVisit<'_> {
 /// walk requests shallow expansions on demand.
 pub async fn walk<V, E>(loader: &TilesetLoader, visit: V) -> Result<(), Error>
 where
-    V: FnMut(&mut TileVisit<'_>) -> Result<TraversalControl, E>,
+    V: FnMut(&mut TileVisit<'_>) -> Result<TraversalControl, E> + Send,
     E: std::error::Error + Send + Sync + 'static,
 {
     walk_with_policy(loader, TraversalPolicy::default(), visit).await
@@ -115,7 +146,7 @@ pub async fn walk_with_policy<V, E>(
     mut visit: V,
 ) -> Result<(), Error>
 where
-    V: FnMut(&mut TileVisit<'_>) -> Result<TraversalControl, E>,
+    V: FnMut(&mut TileVisit<'_>) -> Result<TraversalControl, E> + Send,
     E: std::error::Error + Send + Sync + 'static,
 {
     let root = loader.root().await?;
@@ -146,9 +177,9 @@ fn walk_item<'a, V, E>(
     state: &'a mut WalkState,
     visit: &'a mut V,
     policy: TraversalPolicy,
-) -> Pin<Box<dyn Future<Output = Result<(), Error>> + 'a>>
+) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>>
 where
-    V: FnMut(&mut TileVisit<'_>) -> Result<TraversalControl, E>,
+    V: FnMut(&mut TileVisit<'_>) -> Result<TraversalControl, E> + Send,
     E: std::error::Error + Send + Sync + 'static,
 {
     Box::pin(async move {

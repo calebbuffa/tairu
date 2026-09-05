@@ -1,6 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use schemagen::ir::SchemaNode;
+use schemagen::settings::TypeSettings;
 use schemagen::types::{ExtraFieldDef, parse_type};
 use schemagen::{GenerationPolicy, RustType, StructDef};
 use serde::Deserialize;
@@ -39,6 +40,16 @@ pub struct TairuPolicy {
     pub config: PolicyConfig,
 }
 impl GenerationPolicy for TairuPolicy {
+    fn settings(&self) -> TypeSettings {
+        // Tileset JSON is parsed once per document and then read repeatedly
+        // during traversal, so boxed strings and sorted-slice maps trade
+        // mutation capacity nobody uses for a smaller footprint. Numeric
+        // widths stay at JSON's own: 3D Tiles carries geodetic coordinates and
+        // byte offsets into potentially large buffers, so narrowing by default
+        // would be lossy.
+        TypeSettings::compact()
+    }
+
     fn skip_field(&self, _owner: &SchemaNode, field: &str, _schema: &SchemaNode) -> bool {
         self.config.extensible && matches!(field, "extensions" | "extras")
     }

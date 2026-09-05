@@ -78,19 +78,24 @@ impl DocumentState {
     }
 
     /// Returns the retained implicit-tiling loader state for the tile at
-    /// `path`, or `None` if that tile does not declare implicit tiling (or
-    /// declares an unsupported subdivision scheme).
+    /// `path`, or `None` if that tile does not declare implicit tiling.
     ///
     /// The state is created once per path and cached; subsequent calls -
     /// whether from re-expanding the same explicit tile or from expanding
     /// its implicit descendants - reuse the same `Arc`, so accumulated
     /// availability data and already-fetched subtree files are never
     /// rebuilt or re-fetched.
-    fn implicit_loader(&self, path: &[usize], tile: &crate::Tile) -> Option<ImplicitLoaderState> {
-        let implicit = tile.implicit_tiling.as_ref()?;
+    fn implicit_loader(
+        &self,
+        path: &[usize],
+        tile: &crate::Tile,
+    ) -> Result<Option<ImplicitLoaderState>, Error> {
+        let Some(implicit) = tile.implicit_tiling.as_ref() else {
+            return Ok(None);
+        };
         let mut loaders = self.implicit_loaders.lock().unwrap();
         if let Some(state) = loaders.get(path) {
-            return Some(state.clone());
+            return Ok(Some(state.clone()));
         }
         let state = match implicit.subdivision_scheme {
             crate::SubdivisionScheme::Quadtree => {
@@ -101,10 +106,18 @@ impl DocumentState {
                 ImplicitOctreeLoaderState::new(&self.source_uri, tile, implicit)
                     .map(ImplicitLoaderState::Octree)
             }
-            crate::SubdivisionScheme::S2 => None,
-        }?;
+            crate::SubdivisionScheme::S2 => {
+                return Err(Error::unsupported_implicit_subdivision("S2"));
+            }
+        }
+        .ok_or_else(|| {
+            Error::parse(
+                self.source_uri.to_string(),
+                "implicit tiling missing content template",
+            )
+        })?;
         loaders.insert(path.to_vec(), state.clone());
-        Some(state)
+        Ok(Some(state))
     }
 }
 
@@ -169,6 +182,40 @@ enum ImplicitLoaderState {
     Octree(Arc<ImplicitOctreeLoaderState>),
 }
 
+/// Parameters shared by all implicit subdivision schemes.
+struct ImplicitParams {
+    source_uri: crate::Uri,
+    root_bounding_volume: crate::BoundingVolume,
+    root_geometric_error: f64,
+    content_uri_template: Box<str>,
+    subtree_uri_template: String,
+    subtree_levels: u32,
+    available_levels: u32,
+}
+
+impl ImplicitParams {
+    fn from_tile(
+        source_uri: &crate::Uri,
+        tile: &crate::Tile,
+        implicit: &crate::ImplicitTiling,
+    ) -> Option<Self> {
+        let content_uri_template = tile
+            .content
+            .as_ref()
+            .map(|content| content.uri.clone())
+            .or_else(|| tile.contents.first().map(|content| content.uri.clone()))?;
+        Some(Self {
+            source_uri: source_uri.clone(),
+            root_bounding_volume: tile.bounding_volume.clone(),
+            root_geometric_error: tile.geometric_error,
+            content_uri_template,
+            subtree_uri_template: implicit.subtrees.uri.clone(),
+            subtree_levels: implicit.subtree_levels as u32,
+            available_levels: implicit.available_levels as u32,
+        })
+    }
+}
+
 /// Retained state for one implicitly-tiled quadtree subtree.
 ///
 /// Created once for the explicit tile that declares `implicitTiling` and
@@ -180,7 +227,7 @@ struct ImplicitQuadtreeLoaderState {
     source_uri: crate::Uri,
     root_bounding_volume: crate::BoundingVolume,
     root_geometric_error: f64,
-    content_uri_template: String,
+    content_uri_template: Box<str>,
     subtree_uri_template: String,
     subtree_levels: u32,
     available_levels: u32,
@@ -202,24 +249,18 @@ impl ImplicitQuadtreeLoaderState {
         tile: &crate::Tile,
         implicit: &crate::ImplicitTiling,
     ) -> Option<Arc<Self>> {
-        let content_uri_template = tile
-            .content
-            .as_ref()
-            .map(|content| content.uri.clone())
-            .or_else(|| tile.contents.first().map(|content| content.uri.clone()))?;
-        let subtree_levels = implicit.subtree_levels as u32;
-        let available_levels = implicit.available_levels as u32;
+        let params = ImplicitParams::from_tile(source_uri, tile, implicit)?;
         Some(Arc::new(Self {
-            source_uri: source_uri.clone(),
-            root_bounding_volume: tile.bounding_volume.clone(),
-            root_geometric_error: tile.geometric_error,
-            content_uri_template,
-            subtree_uri_template: implicit.subtrees.uri.clone(),
-            subtree_levels,
-            available_levels,
+            source_uri: params.source_uri,
+            root_bounding_volume: params.root_bounding_volume,
+            root_geometric_error: params.root_geometric_error,
+            content_uri_template: params.content_uri_template,
+            subtree_uri_template: params.subtree_uri_template,
+            subtree_levels: params.subtree_levels,
+            available_levels: params.available_levels,
             availability: Mutex::new(crate::QuadtreeAvailability::new(
-                subtree_levels,
-                available_levels,
+                params.subtree_levels,
+                params.available_levels,
             )),
         }))
     }
@@ -266,7 +307,7 @@ struct ImplicitOctreeLoaderState {
     source_uri: crate::Uri,
     root_bounding_volume: crate::BoundingVolume,
     root_geometric_error: f64,
-    content_uri_template: String,
+    content_uri_template: Box<str>,
     subtree_uri_template: String,
     subtree_levels: u32,
     available_levels: u32,
@@ -288,24 +329,18 @@ impl ImplicitOctreeLoaderState {
         tile: &crate::Tile,
         implicit: &crate::ImplicitTiling,
     ) -> Option<Arc<Self>> {
-        let content_uri_template = tile
-            .content
-            .as_ref()
-            .map(|content| content.uri.clone())
-            .or_else(|| tile.contents.first().map(|content| content.uri.clone()))?;
-        let subtree_levels = implicit.subtree_levels as u32;
-        let available_levels = implicit.available_levels as u32;
+        let params = ImplicitParams::from_tile(source_uri, tile, implicit)?;
         Some(Arc::new(Self {
-            source_uri: source_uri.clone(),
-            root_bounding_volume: tile.bounding_volume.clone(),
-            root_geometric_error: tile.geometric_error,
-            content_uri_template,
-            subtree_uri_template: implicit.subtrees.uri.clone(),
-            subtree_levels,
-            available_levels,
+            source_uri: params.source_uri,
+            root_bounding_volume: params.root_bounding_volume,
+            root_geometric_error: params.root_geometric_error,
+            content_uri_template: params.content_uri_template,
+            subtree_uri_template: params.subtree_uri_template,
+            subtree_levels: params.subtree_levels,
+            available_levels: params.available_levels,
             availability: Mutex::new(crate::OctreeAvailability::new(
-                subtree_levels,
-                available_levels,
+                params.subtree_levels,
+                params.available_levels,
             )),
         }))
     }
@@ -425,8 +460,7 @@ impl TilesetLoader {
     pub fn open<F, Fut>(root_uri: impl Into<crate::Uri>, fetch: F) -> Self
     where
         F: Fn(FetchRequest) -> Fut + Send + Sync + 'static,
-        Fut:
-            Future<Output = Result<::kiba::FetchResponse, ::kiba::FetchError>> + Send + 'static,
+        Fut: Future<Output = Result<::kiba::FetchResponse, ::kiba::FetchError>> + Send + 'static,
     {
         let fetch: Fetch = Arc::new(move |request| Box::pin(fetch(request)));
         Self {
@@ -448,7 +482,7 @@ impl TilesetLoader {
                     bounding_volume: id.subdivide_bounding_volume(&state.root_bounding_volume),
                     geometric_error: state.geometric_error(*id),
                     content: Some(crate::Content {
-                        uri: state.content_uri(*id).to_string(),
+                        uri: state.content_uri(*id).to_string().into_boxed_str(),
                         ..Default::default()
                     }),
                     ..Default::default()
@@ -462,7 +496,7 @@ impl TilesetLoader {
                     bounding_volume: id.subdivide_bounding_volume(&state.root_bounding_volume),
                     geometric_error: state.geometric_error(*id),
                     content: Some(crate::Content {
-                        uri: state.content_uri(*id).to_string(),
+                        uri: state.content_uri(*id).to_string().into_boxed_str(),
                         ..Default::default()
                     }),
                     ..Default::default()
@@ -542,7 +576,7 @@ async fn expand_document_tile(
 ) -> Result<Expansion<TileRef, ContentRef>, Error> {
     let tile = document.tile_at(&path);
 
-    if let Some(state) = document.implicit_loader(&path, tile) {
+    if let Some(state) = document.implicit_loader(&path, tile)? {
         return match state {
             ImplicitLoaderState::Quadtree(state) => {
                 let id = crate::QuadtreeTileId::new(0, 0, 0);

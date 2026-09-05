@@ -1,6 +1,174 @@
 //!Generated 3D Tiles data model. Do not edit.
-#![allow(missing_docs, dead_code, clippy::derivable_impls)]
+#![allow(missing_docs)]
+#![allow(dead_code)]
+#![allow(clippy::derivable_impls)]
+#![allow(clippy::approx_constant)]
+#![allow(clippy::excessive_precision)]
+#![allow(clippy::empty_docs)]
 use serde::{Deserialize, Serialize};
+/// Whether a collection-typed field should be omitted from output.
+///
+/// A schema property that is absent deserializes to an empty
+/// collection, so writing it back out as `[]` or `{}` would not
+/// round-trip.
+fn is_empty_collection<T: EmptyCollection>(value: &T) -> bool {
+    value.is_empty_collection()
+}
+/// Implemented by the collection types that generated fields use.
+trait EmptyCollection {
+    /// Whether this collection has no entries.
+    fn is_empty_collection(&self) -> bool;
+}
+impl<T> EmptyCollection for Vec<T> {
+    fn is_empty_collection(&self) -> bool {
+        self.is_empty()
+    }
+}
+impl<T> EmptyCollection for Box<[T]> {
+    fn is_empty_collection(&self) -> bool {
+        self.is_empty()
+    }
+}
+impl<K, V> EmptyCollection for std::collections::HashMap<K, V> {
+    fn is_empty_collection(&self) -> bool {
+        self.is_empty()
+    }
+}
+/// Deserializes a collection, treating `null` as absent.
+///
+/// A schema that declares an array or object and does not require it
+/// is routinely satisfied by producers writing an explicit `null`
+/// rather than omitting the key. `#[serde(default)]` only covers the
+/// omitted case, so without this a conforming document is rejected.
+fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
+}
+/// A compact, immutable map stored as a sorted `Box<[(K, V)]>`.
+///
+/// Sixteen bytes inline rather than a hash map's forty-eight, with no
+/// spare capacity and no per-lookup hashing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SortedMap<K, V>(Box<[(K, V)]>);
+impl<K, V> Default for SortedMap<K, V> {
+    fn default() -> Self {
+        Self(Box::default())
+    }
+}
+impl<K: Ord, V> SortedMap<K, V> {
+    /// Builds a map from `entries`, sorting them and keeping the first
+    /// value for any duplicated key.
+    pub fn from_vec(mut entries: Vec<(K, V)>) -> Self {
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+        entries.dedup_by(|a, b| a.0 == b.0);
+        Self(entries.into_boxed_slice())
+    }
+    /// Returns the value for `key`, if present.
+    pub fn get<Q>(&self, key: &Q) -> Option<&V>
+    where
+        K: std::borrow::Borrow<Q>,
+        Q: Ord + ?Sized,
+    {
+        self.0
+            .binary_search_by(|(k, _)| k.borrow().cmp(key))
+            .ok()
+            .map(|index| &self.0[index].1)
+    }
+    /// Returns whether `key` is present.
+    pub fn contains_key<Q>(&self, key: &Q) -> bool
+    where
+        K: std::borrow::Borrow<Q>,
+        Q: Ord + ?Sized,
+    {
+        self.get(key).is_some()
+    }
+}
+impl<K, V, Q> std::ops::Index<&Q> for SortedMap<K, V>
+where
+    K: Ord + std::borrow::Borrow<Q>,
+    Q: Ord + ?Sized,
+{
+    type Output = V;
+    fn index(&self, key: &Q) -> &V {
+        self.get(key).expect("no entry found for key")
+    }
+}
+impl<K, V> SortedMap<K, V> {
+    /// Returns the number of entries.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    /// Returns whether the map is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    /// Iterates over entries in key order.
+    pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
+        self.0.iter().map(|(key, value)| (key, value))
+    }
+    /// Iterates over keys in order.
+    pub fn keys(&self) -> impl Iterator<Item = &K> {
+        self.0.iter().map(|(key, _)| key)
+    }
+    /// Iterates over values in key order.
+    pub fn values(&self) -> impl Iterator<Item = &V> {
+        self.0.iter().map(|(_, value)| value)
+    }
+}
+impl<K, V> EmptyCollection for SortedMap<K, V> {
+    fn is_empty_collection(&self) -> bool {
+        self.is_empty()
+    }
+}
+impl<'a, K, V> IntoIterator for &'a SortedMap<K, V> {
+    type Item = (&'a K, &'a V);
+    type IntoIter = std::iter::Map<std::slice::Iter<'a, (K, V)>, fn(&'a (K, V)) -> (&'a K, &'a V)>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter().map(|(key, value)| (key, value))
+    }
+}
+impl<K: Ord, V> FromIterator<(K, V)> for SortedMap<K, V> {
+    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
+        Self::from_vec(iter.into_iter().collect())
+    }
+}
+impl<K: Serialize, V: Serialize> Serialize for SortedMap<K, V> {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = s.serialize_map(Some(self.0.len()))?;
+        for (key, value) in self.0.iter() {
+            map.serialize_entry(key, value)?;
+        }
+        map.end()
+    }
+}
+impl<'de, K: Deserialize<'de> + Ord, V: Deserialize<'de>> Deserialize<'de> for SortedMap<K, V> {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct Visitor<K, V>(std::marker::PhantomData<(K, V)>);
+        impl<'de, K: Deserialize<'de> + Ord, V: Deserialize<'de>> serde::de::Visitor<'de>
+            for Visitor<K, V>
+        {
+            type Value = SortedMap<K, V>;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a map")
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut access: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut entries = Vec::with_capacity(access.size_hint().unwrap_or(4));
+                while let Some(entry) = access.next_entry()? {
+                    entries.push(entry);
+                }
+                Ok(SortedMap::from_vec(entries))
+            }
+        }
+        d.deserialize_map(Visitor(std::marker::PhantomData))
+    }
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Refine {
     #[serde(rename = "ADD")]
@@ -50,7 +218,7 @@ impl Default for BatchTableProperty {
 #[serde(untagged)]
 pub enum BooleanExpression {
     Boolean(bool),
-    String(String),
+    String(Box<str>),
 }
 impl Default for BooleanExpression {
     fn default() -> Self {
@@ -120,7 +288,7 @@ impl Default for GlobalPropertyNumber {
 #[serde(untagged)]
 pub enum NumberExpression {
     Number(f64),
-    String(String),
+    String(Box<str>),
 }
 impl Default for NumberExpression {
     fn default() -> Self {
@@ -170,9 +338,9 @@ pub struct Asset {
         default,
         skip_serializing_if = "Option::is_none"
     )]
-    pub tileset_version: Option<String>,
+    pub tileset_version: Option<Box<str>>,
     ///The 3D Tiles version. The version defines the JSON schema for the tileset JSON and the base set of tile formats.
-    pub version: String,
+    pub version: Box<str>,
     ///Extension-specific data.
     #[serde(default)]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
@@ -294,10 +462,10 @@ pub struct Buffer {
     pub byte_length: usize,
     ///The name of the buffer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub name: Option<Box<str>>,
     ///The URI (or IRI) of the file that contains the binary buffer data. Relative paths are relative to the file containing the buffer JSON. `uri` is required when using the JSON subtree format and not required when using the binary subtree format - when omitted the buffer refers to the binary chunk of the subtree file. Data URIs are not allowed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub uri: Option<String>,
+    pub uri: Option<Box<str>>,
     #[serde(skip)]
     pub data: bytes::Bytes,
     ///Extension-specific data.
@@ -320,7 +488,7 @@ pub struct BufferView {
     pub byte_offset: usize,
     ///The name of the `bufferView`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub name: Option<Box<str>>,
     ///Extension-specific data.
     #[serde(default)]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
@@ -333,13 +501,17 @@ pub struct BufferView {
 pub struct Class {
     ///The description of the class.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub description: Option<Box<str>>,
     ///The name of the class, e.g. for display purposes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub name: Option<Box<str>>,
     ///A dictionary, where each key is a property ID and each value is an object defining the property. Property IDs shall be alphanumeric identifiers matching the regular expression `^[a-zA-Z_][a-zA-Z0-9_]*$`.
-    #[serde(default)]
-    pub properties: std::collections::HashMap<String, ClassProperty>,
+    #[serde(
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub properties: SortedMap<String, ClassProperty>,
     ///Extension-specific data.
     #[serde(default)]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
@@ -368,10 +540,10 @@ pub struct ClassProperty {
     pub default: Option<AnyValue>,
     ///The description of the property.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub description: Option<Box<str>>,
     ///Enum ID as declared in the `enums` dictionary. Required when `type` is `ENUM`. Disallowed when `type` is not `ENUM`
     #[serde(rename = "enumType", default, skip_serializing_if = "Option::is_none")]
-    pub enum_type: Option<String>,
+    pub enum_type: Option<Box<str>>,
     ///Maximum allowed value for the property. Only applicable to `SCALAR`, `VECN`, and `MATN` types. This is the maximum of all property values, after the transforms based on the `normalized`, `offset`, and `scale` properties have been applied. Not applicable to variable-length arrays.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max: Option<NumericValue>,
@@ -380,7 +552,7 @@ pub struct ClassProperty {
     pub min: Option<NumericValue>,
     ///The name of the property, e.g. for display purposes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub name: Option<Box<str>>,
     ///A `noData` value represents missing data — also known as a sentinel value — wherever it appears. `BOOLEAN` properties may not specify `noData` values. This is given as the plain property value, without the transforms from the `normalized`, `offset`, and `scale` properties. Shall not be defined if `required` is true.
     #[serde(rename = "noData", default, skip_serializing_if = "Option::is_none")]
     pub no_data: Option<NoDataValue>,
@@ -398,7 +570,7 @@ pub struct ClassProperty {
     pub scale: Option<NumericValue>,
     ///An identifier that describes how this property should be interpreted. The semantic cannot be used by other properties in the class.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub semantic: Option<String>,
+    pub semantic: Option<Box<str>>,
     ///The element type.
     #[serde(rename = "type")]
     pub r#type: Option<serde_json::Value>,
@@ -425,8 +597,12 @@ pub struct ClassStatistics {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub count: Option<u64>,
     ///A dictionary, where each key corresponds to a property ID in the class' `properties` dictionary and each value is an object containing statistics about property values.
-    #[serde(default)]
-    pub properties: std::collections::HashMap<String, PropertyStatistics>,
+    #[serde(
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub properties: SortedMap<String, PropertyStatistics>,
     ///Extension-specific data.
     #[serde(default)]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
@@ -434,7 +610,7 @@ pub struct ClassStatistics {
     pub extras: Option<serde_json::Value>,
 }
 ///3D Tiles style `expression` that evaluates to a Color. Details are described in the 3D Tiles Styling specification.
-pub type ColorExpression = String;
+pub type ColorExpression = Box<str>;
 ///An `expression` evaluated as the result of a condition being true. An array of two expressions. If the first expression is evaluated and the result is `true`, then the second expression is evaluated and returned as the result of the condition.
 pub type Condition = [Expression; 2];
 ///A series of conditions evaluated in order, like a series of if...else statements that result in an expression being evaluated.
@@ -442,7 +618,11 @@ pub type Condition = [Expression; 2];
 #[serde(rename_all = "camelCase")]
 pub struct Conditions {
     ///A series of boolean conditions evaluated in order. For the first one that evaluates to true, its value, the 'result' (which is also an expression), is evaluated and returned. Result expressions shall all be the same type. If no condition evaluates to true, the result is `undefined`. When conditions is `undefined`, `null`, or an empty object, the result is `undefined`.
-    #[serde(default)]
+    #[serde(
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
     pub conditions: Vec<Condition>,
     ///Extension-specific data.
     #[serde(default)]
@@ -468,7 +648,7 @@ pub struct Content {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<MetadataEntity>,
     ///A uri that points to tile content. When the uri is relative, it is relative to the referring tileset JSON file.
-    pub uri: String,
+    pub uri: Box<str>,
     ///Extension-specific data.
     #[serde(default)]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
@@ -483,10 +663,10 @@ pub type Definitions = serde_json::Value;
 pub struct Enum {
     ///The description of the enum.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub description: Option<Box<str>>,
     ///The name of the enum, e.g. for display purposes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub name: Option<Box<str>>,
     ///The type of the integer enum value.
     #[serde(rename = "valueType", default = "default_enum_value_type")]
     pub value_type: Option<serde_json::Value>,
@@ -507,9 +687,9 @@ fn default_enum_value_type() -> Option<serde_json::Value> {
 pub struct EnumValue {
     ///The description of the enum value.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub description: Option<Box<str>>,
     ///The name of the enum value.
-    pub name: String,
+    pub name: Box<str>,
     ///The integer enum value.
     pub value: i64,
     ///Extension-specific data.
@@ -519,7 +699,7 @@ pub struct EnumValue {
     pub extras: Option<serde_json::Value>,
 }
 ///A valid 3D Tiles style expression. Details are described in the 3D Tiles Styling specification.
-pub type Expression = String;
+pub type Expression = Box<str>;
 ///Dictionary object with extension-specific objects.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -701,10 +881,14 @@ pub struct Meta {
 #[serde(rename_all = "camelCase")]
 pub struct MetadataEntity {
     ///The class that property values conform to. The value shall be a class ID declared in the `classes` dictionary of the metadata schema.
-    pub class: String,
+    pub class: Box<str>,
     ///A dictionary, where each key corresponds to a property ID in the class' `properties` dictionary and each value contains the property values. The type of the value shall match the property definition: For `BOOLEAN` use `true` or `false`. For `STRING` use a JSON string. For numeric types use a JSON number. For `ENUM` use a valid enum `name`, not an integer value. For `ARRAY`, `VECN`, and `MATN` types use a JSON array containing values matching the `componentType`. Required properties shall be included in this dictionary.
-    #[serde(default)]
-    pub properties: std::collections::HashMap<String, AnyValue>,
+    #[serde(
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub properties: SortedMap<String, AnyValue>,
     ///Extension-specific data.
     #[serde(default)]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
@@ -838,7 +1022,11 @@ pub struct PropertyStatistics {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub min: Option<NumericValue>,
     ///A dictionary, where each key corresponds to an enum `name` and each value is the number of occurrences of that enum. Only applicable when `type` is `ENUM`. For fixed-length arrays, this is an array of component-wise occurrences.
-    #[serde(default)]
+    #[serde(
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
     pub occurrences: std::collections::HashMap<String, serde_json::Value>,
     ///The standard deviation of property values occurring in the tileset. Only applicable to `SCALAR`, `VECN`, and `MATN` types. This is the standard deviation of all property values, after the transforms based on the `normalized`, `offset`, and `scale` properties have been applied.
     #[serde(
@@ -864,15 +1052,19 @@ pub struct PropertyStatistics {
 #[serde(rename_all = "camelCase")]
 pub struct PropertyTable {
     ///The class that property values conform to. The value shall be a class ID declared in the `classes` dictionary.
-    pub class: String,
+    pub class: Box<str>,
     ///The number of elements in each property array.
     pub count: u64,
     ///The name of the property table, e.g. for display purposes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub name: Option<Box<str>>,
     ///A dictionary, where each key corresponds to a property ID in the class' `properties` dictionary and each value is an object describing where property values are stored. Required properties shall be included in this dictionary.
-    #[serde(default)]
-    pub properties: std::collections::HashMap<String, PropertyTableProperty>,
+    #[serde(
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub properties: SortedMap<String, PropertyTableProperty>,
     ///Extension-specific data.
     #[serde(default)]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
@@ -940,22 +1132,30 @@ fn default_property_table_property_string_offset_type() -> Option<serde_json::Va
 #[serde(rename_all = "camelCase")]
 pub struct Schema {
     ///A dictionary, where each key is a class ID and each value is an object defining the class. Class IDs shall be alphanumeric identifiers matching the regular expression `^[a-zA-Z_][a-zA-Z0-9_]*$`.
-    #[serde(default)]
-    pub classes: std::collections::HashMap<String, Class>,
+    #[serde(
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub classes: SortedMap<String, Class>,
     ///The description of the schema.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub description: Option<Box<str>>,
     ///A dictionary, where each key is an enum ID and each value is an object defining the values for the enum. Enum IDs shall be alphanumeric identifiers matching the regular expression `^[a-zA-Z_][a-zA-Z0-9_]*$`.
-    #[serde(default)]
-    pub enums: std::collections::HashMap<String, Enum>,
+    #[serde(
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub enums: SortedMap<String, Enum>,
     ///Unique identifier for the schema. Schema IDs shall be alphanumeric identifiers matching the regular expression `^[a-zA-Z_][a-zA-Z0-9_]*$`.
-    pub id: String,
+    pub id: Box<str>,
     ///The name of the schema, e.g. for display purposes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub name: Option<Box<str>>,
     ///Application-specific version of the schema.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub version: Option<String>,
+    pub version: Option<Box<str>>,
     ///Extension-specific data.
     #[serde(default)]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
@@ -967,8 +1167,12 @@ pub struct Schema {
 #[serde(rename_all = "camelCase")]
 pub struct Statistics {
     ///A dictionary, where each key corresponds to a class ID in the `classes` dictionary of the metatata schema that was defined for the tileset that contains these statistics. Each value is an object containing statistics about entities that conform to the class.
-    #[serde(default)]
-    pub classes: std::collections::HashMap<String, ClassStatistics>,
+    #[serde(
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub classes: SortedMap<String, ClassStatistics>,
     ///Extension-specific data.
     #[serde(default)]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
@@ -983,8 +1187,12 @@ pub struct Style {
     #[serde(default = "default_style_color")]
     pub color: StyleColor,
     ///A dictionary object of `expression` strings mapped to a variable name key that may be referenced throughout the style. If an expression references a defined variable, it is replaced with the evaluated result of the corresponding expression.
-    #[serde(default)]
-    pub defines: std::collections::HashMap<String, Expression>,
+    #[serde(
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub defines: SortedMap<String, Expression>,
     ///A `meta` object which determines the values of non-visual properties of the feature.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<Meta>,
@@ -1008,22 +1216,46 @@ fn default_style_show() -> StyleShow {
 #[serde(rename_all = "camelCase")]
 pub struct Subtree {
     ///An array of buffer views.
-    #[serde(rename = "bufferViews", default)]
+    #[serde(
+        rename = "bufferViews",
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
     pub buffer_views: Vec<BufferView>,
     ///An array of buffers.
-    #[serde(default)]
+    #[serde(
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
     pub buffers: Vec<Buffer>,
     ///The availability of children subtrees. The availability bitstream is a 1D boolean array where subtrees are ordered by their Morton index in the level of the tree immediately below the bottom row of the subtree. A child subtree's availability is determined by a single bit, 1 meaning a subtree exists at that spatial index, and 0 meaning it does not. The number of elements in the array is `N^subtreeLevels` where N is 4 for subdivision scheme `QUADTREE` and 8 for `OCTREE`. Availability may be stored in a buffer view or as a constant value that applies to all child subtrees. If availability is 0 for all child subtrees, then the tileset does not subdivide further.
     #[serde(rename = "childSubtreeAvailability")]
     pub child_subtree_availability: Availability,
     ///An array of content availability objects. If the tile has a single content this array will have one element; if the tile has multiple contents - as supported by 3DTILES_multiple_contents and 3D Tiles 1.1 - this array will have multiple elements.
-    #[serde(rename = "contentAvailability", default)]
+    #[serde(
+        rename = "contentAvailability",
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
     pub content_availability: Vec<Availability>,
     ///An array of indexes to property tables containing content metadata. If the tile has a single content this array will have one element; if the tile has multiple contents - as supported by 3DTILES_multiple_contents and 3D Tiles 1.1 - this array will have multiple elements. Content metadata only exists for available contents and is tightly packed by increasing tile index. To access individual content metadata, implementations may create a mapping from tile indices to content metadata indices.
-    #[serde(rename = "contentMetadata", default)]
+    #[serde(
+        rename = "contentMetadata",
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
     pub content_metadata: Vec<u64>,
     ///An array of property tables.
-    #[serde(rename = "propertyTables", default)]
+    #[serde(
+        rename = "propertyTables",
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
     pub property_tables: Vec<PropertyTable>,
     ///Subtree metadata encoded in JSON.
     #[serde(
@@ -1061,7 +1293,7 @@ pub struct Subtrees {
     pub extras: Option<serde_json::Value>,
 }
 ///A URI with embedded expressions that describes the resource that is associated with an implicit tile in an implicit tileset. Allowed expressions are `{level}`, `{x}`, `{y}`, and `{z}`. `{level}` is substituted with the level of the node, `{x}` is substituted with the x index of the node within the level, and `{y}` is substituted with the y index of the node within the level. `{z}` may only be given when the subdivision scheme is `OCTREE`, and it is substituted with the z index of the node within the level.
-pub type TemplateUri = String;
+pub type TemplateUri = Box<str>;
 ///A tile in a 3D Tiles tileset.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1070,13 +1302,21 @@ pub struct Tile {
     #[serde(rename = "boundingVolume")]
     pub bounding_volume: BoundingVolume,
     ///An array of objects that define child tiles. Each child tile content is fully enclosed by its parent tile's bounding volume and, generally, has a geometricError less than its parent tile's geometricError. For leaf tiles, there are no children, and this property may not be defined.
-    #[serde(default)]
+    #[serde(
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
     pub children: Vec<Tile>,
     ///Metadata about the tile's content and a link to the content. When this is omitted the tile is just used for culling. When this is defined, then `contents` shall be undefined.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content: Option<Content>,
     ///An array of contents. When this is defined, then `content` shall be undefined.
-    #[serde(default)]
+    #[serde(
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
     pub contents: Vec<Content>,
     ///The error, in meters, introduced if this tile is rendered and its children are not. At runtime, the geometric error is used to compute screen space error (SSE), i.e., the error measured in pixels.
     #[serde(rename = "geometricError")]
@@ -1122,23 +1362,41 @@ pub struct Tileset {
     ///Metadata about the entire tileset.
     pub asset: Asset,
     ///Names of 3D Tiles extensions required to properly load this tileset. Each element of this array shall also be contained in `extensionsUsed`.
-    #[serde(rename = "extensionsRequired", default)]
-    pub extensions_required: Vec<String>,
+    #[serde(
+        rename = "extensionsRequired",
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub extensions_required: Vec<Box<str>>,
     ///Names of 3D Tiles extensions used somewhere in this tileset.
-    #[serde(rename = "extensionsUsed", default)]
-    pub extensions_used: Vec<String>,
+    #[serde(
+        rename = "extensionsUsed",
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub extensions_used: Vec<Box<str>>,
     ///The error, in meters, introduced if this tileset is not rendered. At runtime, the geometric error is used to compute screen space error (SSE), i.e., the error measured in pixels.
     #[serde(rename = "geometricError")]
     pub geometric_error: f64,
     ///An array of groups that tile content may belong to. Each element of this array is a metadata entity that describes the group. The tile content `group` property is an index into this array.
-    #[serde(default)]
+    #[serde(
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
     pub groups: Vec<Group>,
     ///A metadata entity that is associated with this tileset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<MetadataEntity>,
     ///A dictionary object of metadata about per-feature properties.
-    #[serde(default)]
-    pub properties: std::collections::HashMap<String, Properties>,
+    #[serde(
+        default,
+        skip_serializing_if = "is_empty_collection",
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub properties: SortedMap<String, Properties>,
     ///The root tile.
     pub root: Tile,
     ///An object defining the structure of metadata classes and enums. When this is defined, then `schemaUri` shall be undefined.
@@ -1146,7 +1404,7 @@ pub struct Tileset {
     pub schema: Option<Schema>,
     ///The URI (or IRI) of the external schema file. When this is defined, then `schema` shall be undefined.
     #[serde(rename = "schemaUri", default, skip_serializing_if = "Option::is_none")]
-    pub schema_uri: Option<String>,
+    pub schema_uri: Option<Box<str>>,
     ///An object containing statistics about metadata entities.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub statistics: Option<Statistics>,

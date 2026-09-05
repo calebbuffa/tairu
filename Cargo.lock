@@ -352,7 +352,6 @@ dependencies = [
 [[package]]
 name = "schemagen"
 version = "0.1.0"
-source = "git+https://github.com/calebbuffa/schemagen#b932ed75168901d7f945eb3945e7a115ec7bd019"
 dependencies = [
  "anyhow",
  "clap",

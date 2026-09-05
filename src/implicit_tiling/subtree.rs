@@ -219,9 +219,11 @@ fn resolve_spec(
                 .ok_or(SubtreeParseError::InvalidBufferIndex { index: bv.buffer })?;
             if let Some(uri) = &buf.uri {
                 external_buffers
-                    .get(uri.as_str())
+                    .get(&**uri)
                     .map(Vec::as_slice)
-                    .ok_or_else(|| SubtreeParseError::MissingExternalBuffer { uri: uri.clone() })?
+                    .ok_or_else(|| SubtreeParseError::MissingExternalBuffer {
+                        uri: uri.to_string(),
+                    })?
             } else {
                 inline_binary
             }

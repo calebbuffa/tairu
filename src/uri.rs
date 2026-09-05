@@ -15,14 +15,21 @@ use url::Url;
 /// Returns `true` if the given URI refers to an external tileset.
 ///
 /// This checks if the URI (after stripping query parameters and fragments)
-/// ends with `.json` when lowercased. This is a heuristic used to distinguish
-/// tileset JSON files from content files (GLB, B3DM, etc.).
+/// ends with one of:
+///
+/// - `.json` (3D Tiles 1.x tileset JSON),
+/// - `.tileset.gltf` (3D Tiles Next tileset-as-glTF),
+/// - `.tileset.glb` (3D Tiles Next binary tileset-as-glTF).
+///
+/// It deliberately does **not** classify every `.gltf`/`.glb` as a tileset,
+/// because those are still common tile-content payloads.
 pub fn is_external_tileset_uri(uri: &str) -> bool {
-    uri.split(['?', '#'])
+    let lower = uri
+        .split(['?', '#'])
         .next()
         .unwrap_or(uri)
-        .to_ascii_lowercase()
-        .ends_with(".json")
+        .to_ascii_lowercase();
+    lower.ends_with(".json") || lower.ends_with(".tileset.gltf") || lower.ends_with(".tileset.glb")
 }
 
 /// Resolves a resource reference against a URI or filesystem path.
@@ -596,12 +603,16 @@ mod tests {
             assert!(is_external_tileset_uri("tileset.json"));
             assert!(is_external_tileset_uri("https://example.com/a/b.JSON"));
             assert!(is_external_tileset_uri("tileset.json?query=1#frag"));
+            assert!(is_external_tileset_uri("a/layer.tileset.gltf"));
+            assert!(is_external_tileset_uri("a/layer.tileset.glb"));
         }
 
         #[test]
         fn non_json_uri_is_not_external_tileset() {
             assert!(!is_external_tileset_uri("content.glb"));
             assert!(!is_external_tileset_uri("content.b3dm"));
+            assert!(!is_external_tileset_uri("content.gltf"));
+            assert!(!is_external_tileset_uri("layer.gltf"));
         }
     }
 

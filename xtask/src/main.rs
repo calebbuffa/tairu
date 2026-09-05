@@ -69,15 +69,6 @@ fn run() -> Result<()> {
         &policy,
     )
     .map_err(anyhow::Error::msg)?;
-    // Generated schemas intentionally include types that are only used by
-    // downstream consumers, and the generator emits explicit defaults for
-    // compatibility. Keep those generated-code diagnostics scoped to this
-    // module rather than requiring every consumer to suppress them.
-    let output = output.replacen(
-        "#![allow(missing_docs)]",
-        "#![allow(missing_docs, dead_code, clippy::derivable_impls)]",
-        1,
-    );
     let output = if policy.config.extensible {
         append_extension_impls(
             output,

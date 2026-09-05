@@ -119,7 +119,7 @@ impl Tileset {
     /// Declare that an extension is used somewhere in this tileset.
     ///
     /// Idempotent - calling multiple times with the same name is safe.
-    pub fn add_extension_used(&mut self, name: impl Into<String>) {
+    pub fn add_extension_used(&mut self, name: impl Into<Box<str>>) {
         let name = name.into();
         if !self.extensions_used.contains(&name) {
             self.extensions_used.push(name);
@@ -129,7 +129,7 @@ impl Tileset {
     /// Declare that an extension is **required** (and implicitly used).
     ///
     /// Adds to both `extensionsRequired` and `extensionsUsed`. Idempotent.
-    pub fn add_extension_required(&mut self, name: impl Into<String>) {
+    pub fn add_extension_required(&mut self, name: impl Into<Box<str>>) {
         let name = name.into();
         if !self.extensions_required.contains(&name) {
             self.extensions_required.push(name.clone());
@@ -140,24 +140,24 @@ impl Tileset {
     /// Remove a name from `extensionsUsed`. Also removes it from
     /// `extensionsRequired` if present. Idempotent.
     pub fn remove_extension_used(&mut self, name: &str) {
-        self.extensions_used.retain(|n| n != name);
-        self.extensions_required.retain(|n| n != name);
+        self.extensions_used.retain(|n| &**n != name);
+        self.extensions_required.retain(|n| &**n != name);
     }
 
     /// Remove a name from `extensionsRequired` only (keeps it in
     /// `extensionsUsed`). Idempotent.
     pub fn remove_extension_required(&mut self, name: &str) {
-        self.extensions_required.retain(|n| n != name);
+        self.extensions_required.retain(|n| &**n != name);
     }
 
     /// Returns `true` if the given extension name is in `extensionsUsed`.
     pub fn is_extension_used(&self, name: &str) -> bool {
-        self.extensions_used.iter().any(|n| n == name)
+        self.extensions_used.iter().any(|n| &**n == name)
     }
 
     /// Returns `true` if the given extension name is in `extensionsRequired`.
     pub fn is_extension_required(&self, name: &str) -> bool {
-        self.extensions_required.iter().any(|n| n == name)
+        self.extensions_required.iter().any(|n| &**n == name)
     }
 }
 
@@ -200,7 +200,7 @@ mod tests {
     fn for_each_tile_visits_all() {
         let ts = tree();
         let mut uris: Vec<String> = Vec::new();
-        ts.for_each_content(|c| uris.push(c.uri.clone()));
+        ts.for_each_content(|c| uris.push(c.uri.to_string()));
         assert_eq!(uris, ["root.glb", "child_a.glb", "child_b.glb"]);
     }
 
@@ -235,7 +235,7 @@ mod tests {
         assert_eq!(
             ts.extensions_used
                 .iter()
-                .filter(|n| *n == "EXT_foo")
+                .filter(|n| &***n == "EXT_foo")
                 .count(),
             1
         );

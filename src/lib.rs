@@ -34,10 +34,10 @@
 //! }"#;
 //!
 //! let tileset = from_str(json).unwrap();
-//! assert_eq!(tileset.asset.version, "1.1");
+//! assert_eq!(&*tileset.asset.version, "1.1");
 //!
 //! let mut uris = Vec::new();
-//! tileset.for_each_content(|content| uris.push(content.uri.clone()));
+//! tileset.for_each_content(|content| uris.push(content.uri.to_string()));
 //! assert_eq!(uris, ["root.b3dm"]);
 //! ```
 //!
