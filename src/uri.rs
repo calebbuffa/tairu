@@ -371,7 +371,7 @@ mod tests {
         }
     }
 
-    // ==== Uri::resolve — Windows paths ===================================
+    // ==== Uri::resolve - Windows paths ===================================
 
     mod resolve_windows_path_base {
         use super::*;
@@ -433,7 +433,7 @@ mod tests {
         }
     }
 
-    // ==== Uri::resolve — Unix paths ======================================
+    // ==== Uri::resolve - Unix paths ======================================
 
     mod resolve_unix_path_base {
         use super::*;

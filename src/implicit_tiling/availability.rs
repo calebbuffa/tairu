@@ -33,7 +33,7 @@ pub trait SubtreeTileId: Copy {
     fn relative_position(self, subtree_id: Self) -> (u32, u64);
 }
 
-/// Quadtree tile coordinates — local to avoid external math-library deps.
+/// Quadtree tile coordinates - local to avoid external math-library deps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct QuadtreeTileId {
     /// Level within the quadtree (0 = root).
@@ -104,7 +104,7 @@ impl SubtreeTileId for QuadtreeTileId {
     }
 }
 
-/// Octree tile coordinates — local to avoid external math-library deps.
+/// Octree tile coordinates - local to avoid external math-library deps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OctreeTileId {
     /// Level within the octree (0 = root).
@@ -450,8 +450,6 @@ impl SubtreeAvailability {
     }
 
     /// Returns `true` if any tile within `range` is available in this subtree.
-    ///
-    /// Mirrors `CesiumGeometry::QuadtreeTileRectangularRange` query semantics.
     pub fn any_tile_available_in_range(&self, range: &QuadtreeTileRectangularRange) -> bool {
         for y in range.minimum_y..=range.maximum_y {
             for x in range.minimum_x..=range.maximum_x {
@@ -665,8 +663,6 @@ pub(crate) fn rank_before(data: &[u8], bit_pos: u32) -> u32 {
 }
 
 /// Bitmask of known availability states for a single tile.
-///
-/// Mirrors `CesiumGeometry::TileAvailabilityFlags`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct TileAvailabilityFlags(pub u8);
 
@@ -748,8 +744,6 @@ impl AvailabilityNode {
 ///
 /// Wraps an in-memory tree of [`AvailabilityNode`]s (one per loaded subtree
 /// file) and answers per-tile [`TileAvailabilityFlags`] queries.
-///
-/// Mirrors `CesiumGeometry::QuadtreeAvailability`.
 pub struct QuadtreeAvailability {
     subtree_levels: u32,
     maximum_level: u32,
@@ -1233,7 +1227,7 @@ fn spread3(mut i: u32) -> u32 {
 }
 
 /// 3-D Morton index for `(x, y, z)`.
-/// x-bits in positions 0, 3, 6, …; y-bits in 1, 4, 7, …; z-bits in 2, 5, 8, …
+/// x-bits in positions 0, 3, 6, ...; y-bits in 1, 4, 7, ...; z-bits in 2, 5, 8, ...
 /// Each coordinate must fit in 10 bits (<= level 9 within a subtree of depth 10).
 #[inline]
 fn morton_3d(x: u32, y: u32, z: u32) -> u32 {
@@ -1668,8 +1662,6 @@ mod octree_availability_tests {
 }
 
 /// A rectangular range of tile coordinates at a given zoom level.
-///
-/// Mirrors `CesiumGeometry::QuadtreeTileRectangularRange`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QuadtreeTileRectangularRange {
     /// Zoom level (0 = root).

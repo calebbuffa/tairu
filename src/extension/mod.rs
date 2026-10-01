@@ -1,7 +1,5 @@
-mod esri_crs;
 mod ext_mesh_features;
 
-pub use esri_crs::*;
 pub use ext_mesh_features::*;
 
 use crate::Error;

@@ -1,10 +1,10 @@
-//! kiba loader implementation for 3D Tiles.
+//! Hiera loader implementation for 3D Tiles.
 //!
 //! # Composition model
 //!
 //! [`TilesetLoader`] composes three concrete, internal loader states as
 //! plain structs/enums rather than routing "child loading" through a
-//! generic kiba trait:
+//! generic Hiera trait:
 //!
 //! - [`DocumentState`] retains a fully parsed [`crate::Tileset`] (asset,
 //!   schema, and the whole tile tree) for as long as any [`TileRef`]
@@ -30,15 +30,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ::kiba::{
-    ExpandFuture, Expansion, Fetch, FetchRequest, LoadFuture, LoadOutcome, Loader, RootFuture,
+use ::hiera::{
+    DescribeFuture, ExpandFuture, Expansion, Fetch, FetchRequest, LoadFuture, LoadOutcome, Loader,
+    RootFuture, Spawner,
 };
 
 use crate::Error;
-
-// ---------------------------------------------------------------------
-// Document state: retained parsed tileset documents.
-// ---------------------------------------------------------------------
 
 /// A fully parsed tileset document, retained for as long as any
 /// [`TileRef`] still references it.
@@ -130,19 +127,21 @@ impl DocumentState {
 /// `Arc` to every subsequent request for the same URI.
 struct ExternalTilesetLoader {
     fetch: Fetch,
+    spawner: Arc<dyn Spawner>,
     cache: Mutex<HashMap<String, Arc<DocumentState>>>,
 }
 
 impl ExternalTilesetLoader {
-    fn new(fetch: Fetch) -> Self {
+    fn new(fetch: Fetch, spawner: Arc<dyn Spawner>) -> Self {
         Self {
             fetch,
+            spawner,
             cache: Mutex::new(HashMap::new()),
         }
     }
 
     /// Fetches the raw bytes at `uri`, performing no caching or parsing.
-    async fn fetch_bytes(&self, uri: impl Into<String>) -> Result<Vec<u8>, Error> {
+    async fn fetch_bytes(&self, uri: impl Into<String>) -> Result<::hiera::Bytes, Error> {
         let uri = uri.into();
         let response = (self.fetch)(FetchRequest {
             uri: uri.clone(),
@@ -155,14 +154,22 @@ impl ExternalTilesetLoader {
 
     /// Returns the retained [`DocumentState`] for the tileset manifest at
     /// `uri`, fetching and parsing it only on the first request.
+    ///
+    /// Parsing runs through the caller-provided [`Spawner`] (an
+    /// [`::hiera::InlineSpawner`] by default), so applications may opt into
+    /// running this CPU work off whatever thread polls this future.
     async fn load_document(&self, uri: crate::Uri) -> Result<Arc<DocumentState>, Error> {
         let key = uri.to_string();
         if let Some(document) = self.cache.lock().unwrap().get(&key).cloned() {
             return Ok(document);
         }
         let bytes = self.fetch_bytes(key.clone()).await?;
-        let tileset = crate::from_slice(&bytes)
-            .map_err(|source| Error::parse(key.clone(), source.to_string()))?;
+        let parse_key = key.clone();
+        let tileset = ::hiera::spawn(&*self.spawner, move || {
+            crate::from_slice(&bytes).map_err(|source| Error::parse(parse_key, source.to_string()))
+        })
+        .await
+        .map_err(Error::spawn)??;
         let document = Arc::new(DocumentState {
             source_uri: uri,
             tileset,
@@ -281,18 +288,25 @@ impl ImplicitQuadtreeLoaderState {
         self.root_geometric_error / 2.0_f64.powi(id.level as i32)
     }
 
-    fn register_subtree(
+    async fn register_subtree(
         &self,
+        spawner: &dyn Spawner,
         subtree_root: crate::QuadtreeTileId,
-        data: &[u8],
+        data: ::hiera::Bytes,
         uri: &crate::Uri,
     ) -> Result<(), Error> {
-        let availability = crate::SubtreeAvailability::from_bytes(
-            data,
-            crate::SubdivisionScheme::Quadtree,
-            self.subtree_levels,
-        )
-        .map_err(|source| Error::parse(uri.to_string(), source.to_string()))?;
+        let uri_string = uri.to_string();
+        let subtree_levels = self.subtree_levels;
+        let availability = ::hiera::spawn(spawner, move || {
+            crate::SubtreeAvailability::from_bytes(
+                &data,
+                crate::SubdivisionScheme::Quadtree,
+                subtree_levels,
+            )
+            .map_err(|source| Error::parse(uri_string, source.to_string()))
+        })
+        .await
+        .map_err(Error::spawn)??;
         self.availability
             .lock()
             .unwrap()
@@ -361,18 +375,25 @@ impl ImplicitOctreeLoaderState {
         self.root_geometric_error / 2.0_f64.powi(id.level as i32)
     }
 
-    fn register_subtree(
+    async fn register_subtree(
         &self,
+        spawner: &dyn Spawner,
         subtree_root: crate::OctreeTileId,
-        data: &[u8],
+        data: ::hiera::Bytes,
         uri: &crate::Uri,
     ) -> Result<(), Error> {
-        let availability = crate::SubtreeAvailability::from_bytes(
-            data,
-            crate::SubdivisionScheme::Octree,
-            self.subtree_levels,
-        )
-        .map_err(|source| Error::parse(uri.to_string(), source.to_string()))?;
+        let uri_string = uri.to_string();
+        let subtree_levels = self.subtree_levels;
+        let availability = ::hiera::spawn(spawner, move || {
+            crate::SubtreeAvailability::from_bytes(
+                &data,
+                crate::SubdivisionScheme::Octree,
+                subtree_levels,
+            )
+            .map_err(|source| Error::parse(uri_string, source.to_string()))
+        })
+        .await
+        .map_err(Error::spawn)??;
         self.availability
             .lock()
             .unwrap()
@@ -415,6 +436,39 @@ pub struct TileRef {
     external_root: bool,
 }
 
+/// Source-native bounding data needed for selection.
+#[derive(Debug, Clone)]
+pub enum TileBounds {
+    /// An oriented bounding box.
+    Box([f64; 12]),
+    /// An EPSG:4979 geographic region.
+    Region([f64; 6]),
+    /// A bounding sphere.
+    Sphere([f64; 4]),
+}
+
+/// Immutable native facts for a [`TileRef`].
+///
+/// This compact snapshot crosses Kiba's async description boundary; it does
+/// not clone a full tile or its child/content/metadata collections.
+#[derive(Debug, Clone)]
+pub struct TileInfo {
+    /// The tile's source-native bound.
+    pub bounds: TileBounds,
+    /// The tile-local transform, in 3D Tiles column-major order.
+    pub transform: [f64; 16],
+    /// Geometric error declared by the source.
+    pub geometric_error: f64,
+    /// Source refinement behavior, when explicitly declared.
+    pub refine: Option<crate::Refine>,
+    /// URI of the tileset document containing the tile.
+    pub source_uri: crate::Uri,
+    /// Depth below the current tileset root.
+    pub depth: usize,
+    /// Whether the tile is the root of an external tileset.
+    pub external_root: bool,
+}
+
 impl std::fmt::Debug for TileRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut s = f.debug_struct("TileRef");
@@ -435,7 +489,7 @@ pub struct LoadedContent {
     /// Resolved content URI.
     pub uri: String,
     /// Content bytes.
-    pub bytes: Vec<u8>,
+    pub bytes: ::hiera::Bytes,
     /// Detected tile content format.
     pub format: crate::TileFormat,
 }
@@ -449,7 +503,7 @@ pub struct ContentRef {
     pub format: crate::TileFormat,
 }
 
-/// kiba [`Loader`] implementation for 3D Tiles.
+/// Hiera [`Loader`] implementation for 3D Tiles.
 pub struct TilesetLoader {
     root_uri: crate::Uri,
     documents: Arc<ExternalTilesetLoader>,
@@ -457,15 +511,38 @@ pub struct TilesetLoader {
 
 impl TilesetLoader {
     /// Creates a loader without fetching the root resource.
+    ///
+    /// CPU parsing (tileset JSON, subtree availability) runs inline on
+    /// whatever thread polls this loader's futures, identical to before
+    /// [`Spawner`] existed. Use [`Self::with_spawner`] to opt into routing
+    /// that work elsewhere.
     pub fn open<F, Fut>(root_uri: impl Into<crate::Uri>, fetch: F) -> Self
     where
         F: Fn(FetchRequest) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<::kiba::FetchResponse, ::kiba::FetchError>> + Send + 'static,
+        Fut: Future<Output = Result<::hiera::FetchResponse, ::hiera::FetchError>> + Send + 'static,
+    {
+        Self::with_spawner(root_uri, fetch, Arc::new(::hiera::InlineSpawner))
+    }
+
+    /// Creates a loader that routes CPU parsing work through `spawner`
+    /// instead of running it inline on whatever thread polls this loader's
+    /// futures.
+    ///
+    /// This is entirely opt-in: [`Self::open`] behaves identically to before
+    /// [`Spawner`] existed by defaulting to [`::hiera::InlineSpawner`].
+    pub fn with_spawner<F, Fut>(
+        root_uri: impl Into<crate::Uri>,
+        fetch: F,
+        spawner: Arc<dyn Spawner>,
+    ) -> Self
+    where
+        F: Fn(FetchRequest) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<::hiera::FetchResponse, ::hiera::FetchError>> + Send + 'static,
     {
         let fetch: Fetch = Arc::new(move |request| Box::pin(fetch(request)));
         Self {
             root_uri: root_uri.into(),
-            documents: Arc::new(ExternalTilesetLoader::new(fetch)),
+            documents: Arc::new(ExternalTilesetLoader::new(fetch, spawner)),
         }
     }
 
@@ -507,11 +584,57 @@ impl TilesetLoader {
             ),
         }
     }
+
+    /// Returns the complete source tile addressed by a retained item.
+    ///
+    /// Implicit tiles are synthesized from the retained availability state.
+    /// The returned value is therefore owned rather than borrowed.
+    pub fn tile(&self, item: &TileRef) -> crate::Tile {
+        self.visit_data(item).0
+    }
+
+    /// Returns the parsed tileset document that declared an explicit tile.
+    ///
+    /// Implicit tiles are synthesized from retained availability state, so
+    /// they do not identify one source document through this handle. Callers
+    /// can still obtain their synthesized [`crate::Tile`] with
+    /// [`Self::tile`].
+    pub fn tileset(&self, item: &TileRef) -> Option<crate::Tileset> {
+        match &item.node {
+            Node::Document { document, .. } => Some(document.tileset.clone()),
+            Node::ImplicitQuadtree { .. } | Node::ImplicitOctree { .. } => None,
+        }
+    }
+
+    fn describe_item(&self, item: TileRef) -> TileInfo {
+        let (tile, source_uri, depth, external_root) = self.visit_data(&item);
+        TileInfo {
+            bounds: Self::tile_bounds(&tile.bounding_volume),
+            transform: tile.transform,
+            geometric_error: tile.geometric_error,
+            refine: tile.refine,
+            source_uri,
+            depth,
+            external_root,
+        }
+    }
+
+    fn tile_bounds(volume: &crate::BoundingVolume) -> TileBounds {
+        if let Some(bounds) = volume.r#box {
+            return TileBounds::Box(bounds);
+        }
+        if let Some(bounds) = volume.region {
+            return TileBounds::Region(bounds);
+        }
+        TileBounds::Sphere(volume.sphere.unwrap_or_default())
+    }
 }
 
 impl Loader for TilesetLoader {
     type Item = TileRef;
+    type ItemId = String;
     type ContentRef = ContentRef;
+    type ItemInfo = TileInfo;
     type Content = LoadedContent;
     type Error = Error;
 
@@ -529,6 +652,32 @@ impl Loader for TilesetLoader {
                 external_root: false,
             })
         })
+    }
+
+    fn item_id(&self, item: &Self::Item) -> Self::ItemId {
+        match &item.node {
+            Node::Document { document, path } => {
+                format!(
+                    "{}#{}",
+                    document.source_uri,
+                    path.iter()
+                        .map(usize::to_string)
+                        .collect::<Vec<_>>()
+                        .join("/")
+                )
+            }
+            Node::ImplicitQuadtree { state, id } => {
+                format!("{}#quadtree:{id:?}", state.source_uri)
+            }
+            Node::ImplicitOctree { state, id } => {
+                format!("{}#octree:{id:?}", state.source_uri)
+            }
+        }
+    }
+
+    fn describe(&self, item: Self::Item) -> DescribeFuture<Self::ItemInfo, Self::Error> {
+        let info = self.describe_item(item);
+        Box::pin(async move { Ok(info) })
     }
 
     fn expand(&self, item: Self::Item) -> ExpandFuture<Self::Item, Self::ContentRef, Self::Error> {
@@ -644,7 +793,9 @@ async fn expand_implicit_quadtree(
             let subtree_root = id.subtree_root(state.subtree_levels);
             let uri = state.subtree_uri(subtree_root);
             let bytes = documents.fetch_bytes(uri.to_string()).await?;
-            state.register_subtree(subtree_root, &bytes, &uri)?;
+            state
+                .register_subtree(&*documents.spawner, subtree_root, bytes, &uri)
+                .await?;
             continue;
         }
         break flags;
@@ -701,7 +852,9 @@ async fn expand_implicit_octree(
             let subtree_root = id.subtree_root(state.subtree_levels);
             let uri = state.subtree_uri(subtree_root);
             let bytes = documents.fetch_bytes(uri.to_string()).await?;
-            state.register_subtree(subtree_root, &bytes, &uri)?;
+            state
+                .register_subtree(&*documents.spawner, subtree_root, bytes, &uri)
+                .await?;
             continue;
         }
         break flags;
@@ -760,12 +913,12 @@ mod tests {
         let fetch = move |request: FetchRequest| {
             fetch_requests.fetch_add(1, Ordering::SeqCst);
             let result = match request.uri.as_str() {
-                "memory://root/tileset.json" => Ok(kiba::FetchResponse {
-                    bytes: tileset.clone(),
+                "memory://root/tileset.json" => Ok(hiera::FetchResponse {
+                    bytes: tileset.clone().into(),
                     content_type: Some("application/json".into()),
                 }),
-                "memory://root/root.glb" => Ok(kiba::FetchResponse {
-                    bytes: b"glTFroot".to_vec(),
+                "memory://root/root.glb" => Ok(hiera::FetchResponse {
+                    bytes: b"glTFroot".to_vec().into(),
                     content_type: Some("model/gltf-binary".into()),
                 }),
                 other => Err(Box::new(std::io::Error::other(other)) as _),
@@ -776,6 +929,13 @@ mod tests {
         assert_eq!(requests.load(Ordering::SeqCst), 0);
         let root = block_on(loader.root()).unwrap();
         assert_eq!(requests.load(Ordering::SeqCst), 1);
+        let info = block_on(loader.describe(root.clone())).unwrap();
+        assert!(matches!(
+            info.bounds,
+            TileBounds::Sphere([0.0, 0.0, 0.0, 1.0])
+        ));
+        assert_eq!(info.geometric_error, 1.0);
+        assert_eq!(info.depth, 0);
         let expansion = block_on(loader.expand(root)).unwrap();
         assert_eq!(expansion.children.len(), 1);
         assert_eq!(expansion.contents.len(), 1);
@@ -789,7 +949,7 @@ mod tests {
         let fetch_requests = Arc::clone(&requests);
         let fetch = move |_: FetchRequest| {
             fetch_requests.fetch_add(1, Ordering::SeqCst);
-            let result: Result<kiba::FetchResponse, kiba::FetchError> =
+            let result: Result<hiera::FetchResponse, hiera::FetchError> =
                 Err(Box::new(std::io::Error::other("unused")));
             Box::pin(async move { result })
         };
@@ -819,12 +979,12 @@ mod tests {
         let fetch = move |request: FetchRequest| {
             fetch_requests.fetch_add(1, Ordering::SeqCst);
             let result = match request.uri.as_str() {
-                "memory://root/tileset.json" => Ok(kiba::FetchResponse {
-                    bytes: root_tileset.clone(),
+                "memory://root/tileset.json" => Ok(hiera::FetchResponse {
+                    bytes: root_tileset.clone().into(),
                     content_type: Some("application/json".into()),
                 }),
-                "memory://root/external.json" => Ok(kiba::FetchResponse {
-                    bytes: external_tileset.clone(),
+                "memory://root/external.json" => Ok(hiera::FetchResponse {
+                    bytes: external_tileset.clone().into(),
                     content_type: Some("application/json".into()),
                 }),
                 other => Err(Box::new(std::io::Error::other(other)) as _),
@@ -878,12 +1038,12 @@ mod tests {
         let fetch = move |request: FetchRequest| {
             fetch_requests.fetch_add(1, Ordering::SeqCst);
             let result = match request.uri.as_str() {
-                "memory://root/tileset.json" => Ok(kiba::FetchResponse {
-                    bytes: root_tileset.clone(),
+                "memory://root/tileset.json" => Ok(hiera::FetchResponse {
+                    bytes: root_tileset.clone().into(),
                     content_type: Some("application/json".into()),
                 }),
-                "memory://root/subtrees/0/0/0.subtree" => Ok(kiba::FetchResponse {
-                    bytes: subtree.clone(),
+                "memory://root/subtrees/0/0/0.subtree" => Ok(hiera::FetchResponse {
+                    bytes: subtree.clone().into(),
                     content_type: Some("application/octet-stream".into()),
                 }),
                 other => Err(Box::new(std::io::Error::other(other)) as _),

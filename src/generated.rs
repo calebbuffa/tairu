@@ -553,7 +553,7 @@ pub struct ClassProperty {
     ///The name of the property, e.g. for display purposes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<Box<str>>,
-    ///A `noData` value represents missing data — also known as a sentinel value — wherever it appears. `BOOLEAN` properties may not specify `noData` values. This is given as the plain property value, without the transforms from the `normalized`, `offset`, and `scale` properties. Shall not be defined if `required` is true.
+    ///A `noData` value represents missing data - also known as a sentinel value - wherever it appears. `BOOLEAN` properties may not specify `noData` values. This is given as the plain property value, without the transforms from the `normalized`, `offset`, and `scale` properties. Shall not be defined if `required` is true.
     #[serde(rename = "noData", default, skip_serializing_if = "Option::is_none")]
     pub no_data: Option<NoDataValue>,
     ///Specifies whether integer values are normalized. Only applicable to `SCALAR`, `VECN`, and `MATN` types with integer component types. For unsigned integer component types, values are normalized between `[0.0, 1.0]`. For signed integer component types, values are normalized between `[-1.0, 1.0]`. For all other component types, this property shall be false.

@@ -1,5 +1,4 @@
-//! Extension methods on [`Tileset`] and [`Tile`] matching the Cesium
-//! `Cesium3DTiles::Tileset` and `Cesium3DTiles::Tile` augmented API.
+//! Extension methods on [`Tileset`] and [`Tile`].
 //!
 //! These are plain `impl` blocks - all methods are available directly on the
 //! generated structs without any trait import.

@@ -45,34 +45,16 @@ pub enum Error {
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
 
-    /// User's visitor callback failed.
-    #[error("tile visitor failed: {source}")]
-    VisitorFailed {
-        /// The error returned by the visitor.
-        #[source]
-        source: Box<dyn std::error::Error + Send + Sync>,
-    },
-
-    /// External tileset cycle detected during traversal.
-    #[error("external tileset cycle detected at {uri}")]
-    ExternalCycle {
-        /// The URI where the cycle was detected.
-        uri: String,
-    },
-
-    /// Traversal exceeded its built-in depth limit.
-    #[error("tileset traversal exceeded maximum depth {max}")]
-    TraversalLimit {
-        /// Maximum permitted traversal depth.
-        max: usize,
-    },
-
     /// The loader encountered an implicit tiling scheme it does not implement.
     #[error("unsupported implicit subdivision scheme: {scheme}")]
     UnsupportedImplicitSubdivision {
         /// The unsupported scheme label.
         scheme: &'static str,
     },
+
+    /// A CPU job submitted to a caller-provided [`hiera::Spawner`] failed.
+    #[error("spawned parse job failed: {0}")]
+    Spawn(#[source] hiera::SpawnError),
 }
 
 impl Error {
@@ -88,7 +70,8 @@ impl Error {
     }
 
     /// Create a tile parse error.
-    pub(crate) fn parse(uri: impl Into<String>, message: impl Into<String>) -> Self {
+    /// Creates an error for invalid source or extension data.
+    pub fn parse(uri: impl Into<String>, message: impl Into<String>) -> Self {
         Error::Parse {
             uri: uri.into(),
             message: message.into(),
@@ -102,20 +85,13 @@ impl Error {
         }
     }
 
-    /// Create a visitor error from the error the visitor returned.
-    pub(crate) fn visitor(source: impl std::error::Error + Send + Sync + 'static) -> Self {
-        Error::VisitorFailed {
-            source: Box::new(source),
-        }
-    }
-
-    /// Create an external cycle error.
-    pub(crate) fn external_cycle(uri: impl Into<String>) -> Self {
-        Error::ExternalCycle { uri: uri.into() }
-    }
-
     /// Create an unsupported implicit-subdivision error.
     pub(crate) fn unsupported_implicit_subdivision(scheme: &'static str) -> Self {
         Error::UnsupportedImplicitSubdivision { scheme }
+    }
+
+    /// Create a spawn error from a failed [`hiera::Spawner`] job.
+    pub(crate) fn spawn(source: hiera::SpawnError) -> Self {
+        Error::Spawn(source)
     }
 }

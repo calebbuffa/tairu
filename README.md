@@ -4,12 +4,12 @@
 
 ## Features
 
-- **Generated types** — auto-generated Rust structs covering the full 3D Tiles JSON schema.
-- **Parsing** — parse and validate `tileset.json` from slices, strings, or readers (`from_slice`, `from_str`, `from_reader`), returning the crate-wide `Error`.
-- **Traversal** — walk a tileset, including external tilesets with cycle detection, with resolved world transforms (`walk`, `TileVisit`).
-- **Implicit tiling** — quadtree/octree availability with Morton-index random access (`QuadtreeAvailability`, `OctreeAvailability`, `SubtreeAvailability`), and binary/JSON subtree parsing through `SubtreeAvailability::from_bytes`.
-- **Writing** — serialize tilesets, subtrees, and metadata schemas (`TilesetWriter`, `SubtreeWriter`, `SchemaWriter`) with idiomatic `Result<Vec<u8>, Error>` APIs.
-- **Typed extensions** — read/write vendor extensions as typed values (`Extension`, `HasExtensions`).
+- **Generated types** - auto-generated Rust structs covering the full 3D Tiles JSON schema.
+- **Parsing** - parse and validate `tileset.json` from slices, strings, or readers (`from_slice`, `from_str`, `from_reader`), returning the crate-wide `Error`.
+- **Traversal** - walk a tileset, including external tilesets with cycle detection, with resolved world transforms (`walk`, `TileVisit`).
+- **Implicit tiling** - quadtree/octree availability with Morton-index random access (`QuadtreeAvailability`, `OctreeAvailability`, `SubtreeAvailability`), and binary/JSON subtree parsing through `SubtreeAvailability::from_bytes`.
+- **Writing** - serialize tilesets, subtrees, and metadata schemas (`TilesetWriter`, `SubtreeWriter`, `SchemaWriter`) with idiomatic `Result<Vec<u8>, Error>` APIs.
+- **Typed extensions** - read/write vendor extensions as typed values (`Extension`, `HasExtensions`).
 
 ## Quick start
 
