@@ -8,9 +8,8 @@
 use serde::{Deserialize, Serialize};
 /// Whether a collection-typed field should be omitted from output.
 ///
-/// A schema property that is absent deserializes to an empty
-/// collection, so writing it back out as `[]` or `{}` would not
-/// round-trip.
+/// A schema property that is absent deserializes to an empty collection, so
+/// writing it back out as `[]` or `{}` would not round-trip.
 fn is_empty_collection<T: EmptyCollection>(value: &T) -> bool {
     value.is_empty_collection()
 }
@@ -36,10 +35,10 @@ impl<K, V> EmptyCollection for std::collections::HashMap<K, V> {
 }
 /// Deserializes a collection, treating `null` as absent.
 ///
-/// A schema that declares an array or object and does not require it
-/// is routinely satisfied by producers writing an explicit `null`
-/// rather than omitting the key. `#[serde(default)]` only covers the
-/// omitted case, so without this a conforming document is rejected.
+/// A schema that declares an array or object and does not require it is
+/// routinely satisfied by producers writing an explicit `null` rather than
+/// omitting the key. `#[serde(default)]` only covers the omitted case, so
+/// without this a conforming document is rejected.
 fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -49,8 +48,10 @@ where
 }
 /// A compact, immutable map stored as a sorted `Box<[(K, V)]>`.
 ///
-/// Sixteen bytes inline rather than a hash map's forty-eight, with no
-/// spare capacity and no per-lookup hashing.
+/// Schema "map" shapes are typically small and read-only once parsed, where a
+/// hash map costs far more inline and heap space than a contiguous sorted
+/// slice. Sixteen bytes inline rather than a hash map's forty-eight, with no
+/// spare capacity and no per-lookup hashing; lookup is a binary search.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SortedMap<K, V>(Box<[(K, V)]>);
 impl<K, V> Default for SortedMap<K, V> {
@@ -59,11 +60,11 @@ impl<K, V> Default for SortedMap<K, V> {
     }
 }
 impl<K: Ord, V> SortedMap<K, V> {
-    /// Builds a map from `entries`, sorting them and keeping the first
-    /// value for any duplicated key.
+    /// Builds a map from `entries`, sorting them and keeping the first value
+    /// for any duplicated key.
     pub fn from_vec(mut entries: Vec<(K, V)>) -> Self {
         entries.sort_by(|a, b| a.0.cmp(&b.0));
-        entries.dedup_by(|a, b| a.0 == b.0);
+        entries.dedup_by(|later, earlier| later.0 == earlier.0);
         Self(entries.into_boxed_slice())
     }
     /// Returns the value for `key`, if present.
@@ -169,7 +170,13 @@ impl<'de, K: Deserialize<'de> + Ord, V: Deserialize<'de>> Deserialize<'de> for S
         d.deserialize_map(Visitor(std::marker::PhantomData))
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+///An arbitrary JSON value described by the 3D Tiles metadata specification.
+pub type AnyValue = serde_json::Value;
+///A no-data value described by the 3D Tiles metadata specification.
+pub type NoDataValue = serde_json::Value;
+///A numeric value described by the 3D Tiles metadata specification.
+pub type NumericValue = serde_json::Value;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Refine {
     #[serde(rename = "ADD")]
     Add,
@@ -181,7 +188,7 @@ impl Default for Refine {
         Self::Add
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SubdivisionScheme {
     #[serde(rename = "Quadtree")]
     Quadtree,
@@ -195,14 +202,9 @@ impl Default for SubdivisionScheme {
         Self::Quadtree
     }
 }
-///An arbitrary JSON value described by the 3D Tiles metadata specification.
-pub type AnyValue = serde_json::Value;
-///A numeric value described by the 3D Tiles metadata specification.
-pub type NumericValue = serde_json::Value;
-///A no-data value described by the 3D Tiles metadata specification.
-pub type NoDataValue = serde_json::Value;
 ///An arbitrary JSON value.
 pub type Value = serde_json::Value;
+///A user-defined property which specifies per-feature application-specific metadata in a tile. Values either can be defined directly in the JSON as an array, or can refer to sections in the binary body with a `BinaryBodyReference` object.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum BatchTableProperty {
@@ -214,6 +216,7 @@ impl Default for BatchTableProperty {
         Self::BatchTableBinaryBodyReference(Default::default())
     }
 }
+///A boolean or string with a 3D Tiles style expression that evaluates to a boolean. Details are described in the 3D Tiles Styling specification.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum BooleanExpression {
@@ -225,6 +228,7 @@ impl Default for BooleanExpression {
         Self::Boolean(Default::default())
     }
 }
+///A user-defined property which specifies application-specific metadata in a tile. Values can refer to sections in the binary body with a `BinaryBodyReference` object. Global values can be also be defined directly in the JSON.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum FeatureTableProperty {
@@ -240,6 +244,7 @@ impl Default for FeatureTableProperty {
         Self::FeatureTableBinaryBodyReference(Default::default())
     }
 }
+///An object defining a global 3-component numeric property values for all features.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GlobalPropertyCartesian3 {
@@ -251,6 +256,7 @@ impl Default for GlobalPropertyCartesian3 {
         Self::BinaryBodyOffset(Default::default())
     }
 }
+///An object defining a global 4-component numeric property values for all features.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GlobalPropertyCartesian4 {
@@ -262,6 +268,7 @@ impl Default for GlobalPropertyCartesian4 {
         Self::BinaryBodyOffset(Default::default())
     }
 }
+///An object defining a global integer property value for all features.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GlobalPropertyInteger {
@@ -273,6 +280,7 @@ impl Default for GlobalPropertyInteger {
         Self::BinaryBodyOffset(Default::default())
     }
 }
+///An object defining a global numeric property value for all features.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GlobalPropertyNumber {
@@ -284,6 +292,7 @@ impl Default for GlobalPropertyNumber {
         Self::BinaryBodyOffset(Default::default())
     }
 }
+///3D Tiles style expression that evaluates to a number. Details are described in the 3D Tiles Styling specification.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum NumberExpression {
@@ -295,6 +304,7 @@ impl Default for NumberExpression {
         Self::Number(Default::default())
     }
 }
+///A `number expression` or `conditions` property which determines the size of the points in pixels.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum PointCloudStylePointSize {
@@ -306,6 +316,7 @@ impl Default for PointCloudStylePointSize {
         Self::NumberExpression(Default::default())
     }
 }
+///A `color expression` or `conditions` property which determines the color blended with the feature's intrinsic color.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum StyleColor {
@@ -317,6 +328,7 @@ impl Default for StyleColor {
         Self::ColorExpression(Default::default())
     }
 }
+///A `boolean expression` or `conditions` property which determines if a feature should be shown.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum StyleShow {
@@ -333,30 +345,31 @@ impl Default for StyleShow {
 #[serde(rename_all = "camelCase")]
 pub struct Asset {
     ///Application-specific version of this tileset, e.g., for when an existing tileset is updated.
-    #[serde(
-        rename = "tilesetVersion",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tileset_version: Option<Box<str>>,
     ///The 3D Tiles version. The version defines the JSON schema for the tileset JSON and the base set of tile formats.
     pub version: Box<str>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for Asset {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///An object describing the availability of a set of elements.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Availability {
     ///A number indicating how many 1 bits exist in the availability bitstream.
-    #[serde(
-        rename = "availableCount",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub available_count: Option<u64>,
     ///Index of a buffer view that indicates whether each element is available. The bitstream conforms to the boolean array encoding described in the 3D Metadata specification. If an element is available, its bit is 1, and if it is unavailable, its bit is 0.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -365,10 +378,19 @@ pub struct Availability {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub constant: Option<u64>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for Availability {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///A set of properties defining application-specific metadata for features in a tile.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -377,29 +399,44 @@ pub struct BatchTable {
     #[serde(default, flatten)]
     pub additional_properties: std::collections::HashMap<String, BatchTableProperty>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for BatchTable {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///An object defining the reference to a section of the binary body of the batch table where the property values are stored if not defined directly in the JSON.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BatchTableBinaryBodyReference {
     ///The offset into the buffer in bytes.
-    #[serde(rename = "byteOffset")]
     pub byte_offset: u64,
     ///The datatype of components in the property.
-    #[serde(rename = "componentType")]
-    pub component_type: String,
+    pub component_type: Box<str>,
     ///Specifies if the property is a scalar or vector.
-    #[serde(rename = "type")]
-    pub r#type: String,
+    pub r#type: Box<str>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for BatchTableBinaryBodyReference {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///A set of Batched 3D Model semantics that contain additional information about features in a tile.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -416,30 +453,47 @@ pub struct Batched3dModelFeatureTable {
     )]
     pub rtc_center: Option<GlobalPropertyCartesian3>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for Batched3dModelFeatureTable {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///An object defining the offset into a section of the binary body of the features table where the property values are stored if not defined directly in the JSON.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BinaryBodyOffset {
     ///The offset into the buffer in bytes.
-    #[serde(rename = "byteOffset")]
     pub byte_offset: u64,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for BinaryBodyOffset {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///A bounding volume that encloses a tile or its content. At least one bounding volume property is required. Bounding volumes include `box`, `region`, or `sphere`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BoundingVolume {
     ///An array of 12 numbers that define an oriented bounding box. The first three elements define the x, y, and z values for the center of the box. The next three elements (with indices 3, 4, and 5) define the x axis direction and half-length. The next three elements (indices 6, 7, and 8) define the y axis direction and half-length. The last three elements (indices 9, 10, and 11) define the z axis direction and half-length.
-    #[serde(rename = "box", default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub r#box: Option<[f64; 12]>,
     ///An array of six numbers that define a bounding geographic region in EPSG:4979 coordinates with the order [west, south, east, north, minimum height, maximum height]. Longitudes and latitudes are in radians. The range for latitudes is [-PI/2,PI/2]. The range for longitudes is [-PI,PI]. The value that is given as the 'south' of the region shall not be larger than the value for the 'north' of the region. The heights are in meters above (or below) the WGS84 ellipsoid. The 'minimum height' shall not be larger than the 'maximum height'.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -448,17 +502,25 @@ pub struct BoundingVolume {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sphere: Option<[f64; 4]>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for BoundingVolume {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///A buffer is a binary blob. It is either the binary chunk of the subtree file, or an external buffer referenced by a URI.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Buffer {
     ///The length of the buffer in bytes.
-    #[serde(rename = "byteLength")]
     pub byte_length: usize,
     ///The name of the buffer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -466,13 +528,23 @@ pub struct Buffer {
     ///The URI (or IRI) of the file that contains the binary buffer data. Relative paths are relative to the file containing the buffer JSON. `uri` is required when using the JSON subtree format and not required when using the binary subtree format - when omitted the buffer refers to the binary chunk of the subtree file. Data URIs are not allowed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uri: Option<Box<str>>,
+    ///The buffer's decoded bytes; never part of the JSON.
     #[serde(skip)]
     pub data: bytes::Bytes,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for Buffer {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///A contiguous subset of a buffer
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -481,19 +553,26 @@ pub struct BufferView {
     ///The index of the buffer.
     pub buffer: usize,
     ///The total byte length of the buffer view.
-    #[serde(rename = "byteLength")]
     pub byte_length: usize,
     ///The offset into the buffer in bytes.
-    #[serde(rename = "byteOffset")]
     pub byte_offset: usize,
     ///The name of the `bufferView`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<Box<str>>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for BufferView {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///A class containing a set of properties.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -513,24 +592,29 @@ pub struct Class {
     )]
     pub properties: SortedMap<String, ClassProperty>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
 }
+impl crate::HasExtensions for Class {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
+}
 ///A single property of a metadata class.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClassProperty {
     ///Whether the property is an array. When `count` is defined the property is a fixed-length array. Otherwise the property is a variable-length array.
     #[serde(default = "default_class_property_array")]
     pub array: bool,
     ///The datatype of the element's components. Required for `SCALAR`, `VECN`, and `MATN` types, and disallowed for other types.
-    #[serde(
-        rename = "componentType",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub component_type: Option<serde_json::Value>,
     ///The number of array elements. May only be defined when `array` is `true`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -542,7 +626,7 @@ pub struct ClassProperty {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<Box<str>>,
     ///Enum ID as declared in the `enums` dictionary. Required when `type` is `ENUM`. Disallowed when `type` is not `ENUM`
-    #[serde(rename = "enumType", default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub enum_type: Option<Box<str>>,
     ///Maximum allowed value for the property. Only applicable to `SCALAR`, `VECN`, and `MATN` types. This is the maximum of all property values, after the transforms based on the `normalized`, `offset`, and `scale` properties have been applied. Not applicable to variable-length arrays.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -553,8 +637,8 @@ pub struct ClassProperty {
     ///The name of the property, e.g. for display purposes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<Box<str>>,
-    ///A `noData` value represents missing data - also known as a sentinel value - wherever it appears. `BOOLEAN` properties may not specify `noData` values. This is given as the plain property value, without the transforms from the `normalized`, `offset`, and `scale` properties. Shall not be defined if `required` is true.
-    #[serde(rename = "noData", default, skip_serializing_if = "Option::is_none")]
+    ///A `noData` value represents missing data — also known as a sentinel value — wherever it appears. `BOOLEAN` properties may not specify `noData` values. This is given as the plain property value, without the transforms from the `normalized`, `offset`, and `scale` properties. Shall not be defined if `required` is true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub no_data: Option<NoDataValue>,
     ///Specifies whether integer values are normalized. Only applicable to `SCALAR`, `VECN`, and `MATN` types with integer component types. For unsigned integer component types, values are normalized between `[0.0, 1.0]`. For signed integer component types, values are normalized between `[-1.0, 1.0]`. For all other component types, this property shall be false.
     #[serde(default = "default_class_property_normalized")]
@@ -572,13 +656,37 @@ pub struct ClassProperty {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub semantic: Option<Box<str>>,
     ///The element type.
-    #[serde(rename = "type")]
     pub r#type: Option<serde_json::Value>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl Default for ClassProperty {
+    fn default() -> Self {
+        Self {
+            array: default_class_property_array(),
+            component_type: Default::default(),
+            count: Default::default(),
+            default: Default::default(),
+            description: Default::default(),
+            enum_type: Default::default(),
+            max: Default::default(),
+            min: Default::default(),
+            name: Default::default(),
+            no_data: Default::default(),
+            normalized: default_class_property_normalized(),
+            offset: Default::default(),
+            required: default_class_property_required(),
+            scale: Default::default(),
+            semantic: Default::default(),
+            r#type: Default::default(),
+            extensions: Default::default(),
+            extras: Default::default(),
+        }
+    }
 }
 fn default_class_property_array() -> bool {
     false
@@ -588,6 +696,14 @@ fn default_class_property_normalized() -> bool {
 }
 fn default_class_property_required() -> bool {
     false
+}
+impl crate::HasExtensions for ClassProperty {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///Statistics about entities that conform to a class that was defined in a metadata schema.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -604,10 +720,19 @@ pub struct ClassStatistics {
     )]
     pub properties: SortedMap<String, PropertyStatistics>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for ClassStatistics {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///3D Tiles style `expression` that evaluates to a Color. Details are described in the 3D Tiles Styling specification.
 pub type ColorExpression = Box<str>;
@@ -625,21 +750,26 @@ pub struct Conditions {
     )]
     pub conditions: Vec<Condition>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for Conditions {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///Metadata about the tile's content and a link to the content.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Content {
     ///An optional bounding volume that tightly encloses tile content. tile.boundingVolume provides spatial coherence and tile.content.boundingVolume enables tight view frustum culling. When this is omitted, tile.boundingVolume is used.
-    #[serde(
-        rename = "boundingVolume",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bounding_volume: Option<BoundingVolume>,
     ///The group this content belongs to. The value is an index into the array of `groups` that is defined for the containing tileset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -650,15 +780,24 @@ pub struct Content {
     ///A uri that points to tile content. When the uri is relative, it is relative to the referring tileset JSON file.
     pub uri: Box<str>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for Content {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///Common definitions used in schema files.
 pub type Definitions = serde_json::Value;
 ///An object defining the values of an enum.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Enum {
     ///The description of the enum.
@@ -668,18 +807,39 @@ pub struct Enum {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<Box<str>>,
     ///The type of the integer enum value.
-    #[serde(rename = "valueType", default = "default_enum_value_type")]
+    #[serde(default = "default_enum_value_type")]
     pub value_type: Option<serde_json::Value>,
     ///An array of enum values. Duplicate names or duplicate integer values are not allowed.
     pub values: Vec<EnumValue>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
 }
+impl Default for Enum {
+    fn default() -> Self {
+        Self {
+            description: Default::default(),
+            name: Default::default(),
+            value_type: default_enum_value_type(),
+            values: Default::default(),
+            extensions: Default::default(),
+            extras: Default::default(),
+        }
+    }
+}
 fn default_enum_value_type() -> Option<serde_json::Value> {
-    Some(serde_json::Value::String("UINT16".to_owned()))
+    Some(serde_json::from_str("\"UINT16\"").expect("a schema default must match its type"))
+}
+impl crate::HasExtensions for Enum {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///An enum value.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -693,10 +853,19 @@ pub struct EnumValue {
     ///The integer enum value.
     pub value: i64,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for EnumValue {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///A valid 3D Tiles style expression. Details are described in the 3D Tiles Styling specification.
 pub type Expression = Box<str>;
@@ -707,10 +876,19 @@ pub struct Extension {
     #[serde(default, flatten)]
     pub additional_properties: std::collections::HashMap<String, serde_json::Value>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for Extension {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///Application-specific data.
 pub type Extras = serde_json::Value;
@@ -721,27 +899,41 @@ pub struct FeatureTable {
     #[serde(default, flatten)]
     pub additional_properties: std::collections::HashMap<String, FeatureTableProperty>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for FeatureTable {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///An object defining the reference to a section of the binary body of the features table where the property values are stored if not defined directly in the JSON.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FeatureTableBinaryBodyReference {
     ///The datatype of components in the property. This is defined only if the semantic allows for overriding the implicit component type. These cases are specified in each tile format.
-    #[serde(
-        rename = "componentType",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub component_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub component_type: Option<Box<str>>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for FeatureTableBinaryBodyReference {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///An object defining a global boolean property value for all features.
 pub type GlobalPropertyBoolean = bool;
@@ -750,31 +942,46 @@ pub type GlobalPropertyBoolean = bool;
 #[serde(rename_all = "camelCase")]
 pub struct Group {
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for Group {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///This object allows a tile to be implicitly subdivided. Tile and content availability and metadata is stored in subtrees which are referenced externally.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImplicitTiling {
     ///The numbers of the levels in the tree with available tiles.
-    #[serde(rename = "availableLevels")]
     pub available_levels: u64,
     ///A string describing the subdivision scheme used within the tileset.
-    #[serde(rename = "subdivisionScheme")]
     pub subdivision_scheme: SubdivisionScheme,
     ///The number of distinct levels in each subtree. For example, a quadtree with `subtreeLevels = 2` will have subtrees with 5 nodes (one root and 4 children).
-    #[serde(rename = "subtreeLevels")]
     pub subtree_levels: u64,
     ///An object describing the location of subtree files.
     pub subtrees: Subtrees,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for ImplicitTiling {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///A set of Instanced 3D Model semantics that contains values defining the position and appearance properties for instanced models in a tile.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -859,10 +1066,19 @@ pub struct Instanced3dModelFeatureTable {
     )]
     pub scale_non_uniform: Option<FeatureTableBinaryBodyReference>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for Instanced3dModelFeatureTable {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///A series of property names and the `expression` to evaluate for the value of that property.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -871,10 +1087,19 @@ pub struct Meta {
     #[serde(default, flatten)]
     pub additional_properties: std::collections::HashMap<String, Expression>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for Meta {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///An object containing a reference to a class from a metadata schema, and property values that conform to the properties of that class.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -890,10 +1115,19 @@ pub struct MetadataEntity {
     )]
     pub properties: SortedMap<String, AnyValue>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for MetadataEntity {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///A set of Point Cloud semantics that contains values defining the position and appearance properties for points in a tile.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -970,26 +1204,53 @@ pub struct PointCloudFeatureTable {
     )]
     pub rtc_center: Option<GlobalPropertyCartesian3>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
 }
+impl crate::HasExtensions for PointCloudFeatureTable {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
+}
 ///A 3D Tiles style with additional properties for Point Clouds.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PointCloudStyle {
     ///A `number expression` or `conditions` property which determines the size of the points in pixels.
-    #[serde(rename = "pointSize", default = "default_point_cloud_style_point_size")]
+    #[serde(default = "default_point_cloud_style_point_size")]
     pub point_size: PointCloudStylePointSize,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
 }
+impl Default for PointCloudStyle {
+    fn default() -> Self {
+        Self {
+            point_size: default_point_cloud_style_point_size(),
+            extensions: Default::default(),
+            extras: Default::default(),
+        }
+    }
+}
 fn default_point_cloud_style_point_size() -> PointCloudStylePointSize {
-    serde_json::from_str("1.0").expect("valid generated JSON default")
+    serde_json::from_str("1.0").expect("a schema default must match its type")
+}
+impl crate::HasExtensions for PointCloudStyle {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///A dictionary object of metadata about per-feature properties.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -1000,10 +1261,19 @@ pub struct Properties {
     ///The minimum value of this property of all the features in the tileset. The maximum value shall not be smaller than the minimum value.
     pub minimum: f64,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for Properties {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///Statistics about property values.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -1029,11 +1299,7 @@ pub struct PropertyStatistics {
     )]
     pub occurrences: std::collections::HashMap<String, serde_json::Value>,
     ///The standard deviation of property values occurring in the tileset. Only applicable to `SCALAR`, `VECN`, and `MATN` types. This is the standard deviation of all property values, after the transforms based on the `normalized`, `offset`, and `scale` properties have been applied.
-    #[serde(
-        rename = "standardDeviation",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub standard_deviation: Option<NumericValue>,
     ///The sum of property values occurring in the tileset. Only applicable to `SCALAR`, `VECN`, and `MATN` types. This is the sum of all property values, after the transforms based on the `normalized`, `offset`, and `scale` properties have been applied.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1042,10 +1308,19 @@ pub struct PropertyStatistics {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub variance: Option<NumericValue>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for PropertyStatistics {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///Properties conforming to a class, organized as property values stored in binary columnar arrays.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -1066,27 +1341,29 @@ pub struct PropertyTable {
     )]
     pub properties: SortedMap<String, PropertyTableProperty>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
 }
+impl crate::HasExtensions for PropertyTable {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
+}
 ///An array of binary property values. This represents one column of a property table, and contains one value of a certain property for each metadata entity.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PropertyTableProperty {
     ///The type of values in `arrayOffsets`.
-    #[serde(
-        rename = "arrayOffsetType",
-        default = "default_property_table_property_array_offset_type"
-    )]
+    #[serde(default = "default_property_table_property_array_offset_type")]
     pub array_offset_type: Option<serde_json::Value>,
     ///The index of the buffer view containing offsets for variable-length arrays. The number of offsets is equal to the property table `count` plus one. The offsets represent the start positions of each array, with the last offset representing the position after the last array. The array length is computed using the difference between the subsequent offset and the current offset. If `type` is `STRING` the offsets index into the string offsets array (stored in `stringOffsets`), otherwise they index into the property array (stored in `values`). The data type of these offsets is determined by `arrayOffsetType`. The buffer view `byteOffset` shall be aligned to a multiple of the `arrayOffsetType` size.
-    #[serde(
-        rename = "arrayOffsets",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub array_offsets: Option<u64>,
     ///Maximum value present in the property values. Only applicable to `SCALAR`, `VECN`, and `MATN` types. This is the maximum of all property values, after the transforms based on the `normalized`, `offset`, and `scale` properties have been applied.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1101,31 +1378,50 @@ pub struct PropertyTableProperty {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scale: Option<NumericValue>,
     ///The type of values in `stringOffsets`.
-    #[serde(
-        rename = "stringOffsetType",
-        default = "default_property_table_property_string_offset_type"
-    )]
+    #[serde(default = "default_property_table_property_string_offset_type")]
     pub string_offset_type: Option<serde_json::Value>,
     ///The index of the buffer view containing offsets for strings. The number of offsets is equal to the number of string elements plus one. The offsets represent the byte offsets of each string in the property array (stored in `values`), with the last offset representing the byte offset after the last string. The string byte length is computed using the difference between the subsequent offset and the current offset. The data type of these offsets is determined by `stringOffsetType`. The buffer view `byteOffset` shall be aligned to a multiple of the `stringOffsetType` size.
-    #[serde(
-        rename = "stringOffsets",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub string_offsets: Option<u64>,
     ///The index of the buffer view containing property values. The data type of property values is determined by the property definition: When `type` is `BOOLEAN` values are packed into a bitstream. When `type` is `STRING` values are stored as byte sequences and decoded as UTF-8 strings. When `type` is `SCALAR`, `VECN`, or `MATN` the values are stored as the provided `componentType` and the buffer view `byteOffset` shall be aligned to a multiple of the `componentType` size. When `type` is `ENUM` values are stored as the enum's `valueType` and the buffer view `byteOffset` shall be aligned to a multiple of the `valueType` size. Each enum value in the array shall match one of the allowed values in the enum definition. `arrayOffsets` is required for variable-length arrays and `stringOffsets` is required for strings (for variable-length arrays of strings, both are required).
     pub values: u64,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
 }
+impl Default for PropertyTableProperty {
+    fn default() -> Self {
+        Self {
+            array_offset_type: default_property_table_property_array_offset_type(),
+            array_offsets: Default::default(),
+            max: Default::default(),
+            min: Default::default(),
+            offset: Default::default(),
+            scale: Default::default(),
+            string_offset_type: default_property_table_property_string_offset_type(),
+            string_offsets: Default::default(),
+            values: Default::default(),
+            extensions: Default::default(),
+            extras: Default::default(),
+        }
+    }
+}
 fn default_property_table_property_array_offset_type() -> Option<serde_json::Value> {
-    Some(serde_json::Value::String("UINT32".to_owned()))
+    Some(serde_json::from_str("\"UINT32\"").expect("a schema default must match its type"))
 }
 fn default_property_table_property_string_offset_type() -> Option<serde_json::Value> {
-    Some(serde_json::Value::String("UINT32".to_owned()))
+    Some(serde_json::from_str("\"UINT32\"").expect("a schema default must match its type"))
+}
+impl crate::HasExtensions for PropertyTableProperty {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///An object defining classes and enums.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -1157,10 +1453,19 @@ pub struct Schema {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<Box<str>>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for Schema {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///Statistics about entities.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -1174,13 +1479,22 @@ pub struct Statistics {
     )]
     pub classes: SortedMap<String, ClassStatistics>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
 }
+impl crate::HasExtensions for Statistics {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
+}
 ///A 3D Tiles style.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Style {
     ///A `color expression` or `conditions` property which determines the color blended with the feature's intrinsic color.
@@ -1200,16 +1514,37 @@ pub struct Style {
     #[serde(default = "default_style_show")]
     pub show: StyleShow,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
 }
+impl Default for Style {
+    fn default() -> Self {
+        Self {
+            color: default_style_color(),
+            defines: Default::default(),
+            meta: Default::default(),
+            show: default_style_show(),
+            extensions: Default::default(),
+            extras: Default::default(),
+        }
+    }
+}
 fn default_style_color() -> StyleColor {
-    serde_json::from_str("\"color('#FFFFFF')\"").expect("valid generated JSON default")
+    serde_json::from_str("\"color('#FFFFFF')\"").expect("a schema default must match its type")
 }
 fn default_style_show() -> StyleShow {
-    serde_json::from_str("\"true\"").expect("valid generated JSON default")
+    serde_json::from_str("\"true\"").expect("a schema default must match its type")
+}
+impl crate::HasExtensions for Style {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///An object describing the availability of tiles and content in a subtree, as well as availability of children subtrees. May also store metadata for available tiles and content.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -1217,7 +1552,6 @@ fn default_style_show() -> StyleShow {
 pub struct Subtree {
     ///An array of buffer views.
     #[serde(
-        rename = "bufferViews",
         default,
         skip_serializing_if = "is_empty_collection",
         deserialize_with = "deserialize_null_default"
@@ -1231,11 +1565,9 @@ pub struct Subtree {
     )]
     pub buffers: Vec<Buffer>,
     ///The availability of children subtrees. The availability bitstream is a 1D boolean array where subtrees are ordered by their Morton index in the level of the tree immediately below the bottom row of the subtree. A child subtree's availability is determined by a single bit, 1 meaning a subtree exists at that spatial index, and 0 meaning it does not. The number of elements in the array is `N^subtreeLevels` where N is 4 for subdivision scheme `QUADTREE` and 8 for `OCTREE`. Availability may be stored in a buffer view or as a constant value that applies to all child subtrees. If availability is 0 for all child subtrees, then the tileset does not subdivide further.
-    #[serde(rename = "childSubtreeAvailability")]
     pub child_subtree_availability: Availability,
     ///An array of content availability objects. If the tile has a single content this array will have one element; if the tile has multiple contents - as supported by 3DTILES_multiple_contents and 3D Tiles 1.1 - this array will have multiple elements.
     #[serde(
-        rename = "contentAvailability",
         default,
         skip_serializing_if = "is_empty_collection",
         deserialize_with = "deserialize_null_default"
@@ -1243,7 +1575,6 @@ pub struct Subtree {
     pub content_availability: Vec<Availability>,
     ///An array of indexes to property tables containing content metadata. If the tile has a single content this array will have one element; if the tile has multiple contents - as supported by 3DTILES_multiple_contents and 3D Tiles 1.1 - this array will have multiple elements. Content metadata only exists for available contents and is tightly packed by increasing tile index. To access individual content metadata, implementations may create a mapping from tile indices to content metadata indices.
     #[serde(
-        rename = "contentMetadata",
         default,
         skip_serializing_if = "is_empty_collection",
         deserialize_with = "deserialize_null_default"
@@ -1251,34 +1582,33 @@ pub struct Subtree {
     pub content_metadata: Vec<u64>,
     ///An array of property tables.
     #[serde(
-        rename = "propertyTables",
         default,
         skip_serializing_if = "is_empty_collection",
         deserialize_with = "deserialize_null_default"
     )]
     pub property_tables: Vec<PropertyTable>,
     ///Subtree metadata encoded in JSON.
-    #[serde(
-        rename = "subtreeMetadata",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subtree_metadata: Option<MetadataEntity>,
     ///The availability of tiles in the subtree. The availability bitstream is a 1D boolean array where tiles are ordered by their level in the subtree and Morton index within that level. A tile's availability is determined by a single bit, 1 meaning a tile exists at that spatial index, and 0 meaning it does not. The number of elements in the array is `(N^subtreeLevels - 1)/(N - 1)` where N is 4 for subdivision scheme `QUADTREE` and 8 for `OCTREE`. Availability may be stored in a buffer view or as a constant value that applies to all tiles. If a non-root tile's availability is 1 its parent tile's availability shall also be 1. `tileAvailability.constant: 0` is disallowed, as subtrees shall have at least one tile.
-    #[serde(rename = "tileAvailability")]
     pub tile_availability: Availability,
     ///Index of the property table containing tile metadata. Tile metadata only exists for available tiles and is tightly packed by increasing tile index. To access individual tile metadata, implementations may create a mapping from tile indices to tile metadata indices.
-    #[serde(
-        rename = "tileMetadata",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tile_metadata: Option<u64>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for Subtree {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///An object describing the location of subtree files.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -1287,19 +1617,27 @@ pub struct Subtrees {
     ///A template URI pointing to subtree files. A subtree is a fixed-depth (defined by `subtreeLevels`) portion of the tree to keep memory use bounded. The URI of each file is substituted with the subtree root's global level, x, and y. For subdivision scheme `OCTREE`, z shall also be given. Relative paths are relative to the tileset JSON.
     pub uri: String,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl crate::HasExtensions for Subtrees {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///A URI with embedded expressions that describes the resource that is associated with an implicit tile in an implicit tileset. Allowed expressions are `{level}`, `{x}`, `{y}`, and `{z}`. `{level}` is substituted with the level of the node, `{x}` is substituted with the x index of the node within the level, and `{y}` is substituted with the y index of the node within the level. `{z}` may only be given when the subdivision scheme is `OCTREE`, and it is substituted with the z index of the node within the level.
 pub type TemplateUri = Box<str>;
 ///A tile in a 3D Tiles tileset.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Tile {
     ///The bounding volume that encloses the tile.
-    #[serde(rename = "boundingVolume")]
     pub bounding_volume: BoundingVolume,
     ///An array of objects that define child tiles. Each child tile content is fully enclosed by its parent tile's bounding volume and, generally, has a geometricError less than its parent tile's geometricError. For leaf tiles, there are no children, and this property may not be defined.
     #[serde(
@@ -1319,14 +1657,9 @@ pub struct Tile {
     )]
     pub contents: Vec<Content>,
     ///The error, in meters, introduced if this tile is rendered and its children are not. At runtime, the geometric error is used to compute screen space error (SSE), i.e., the error measured in pixels.
-    #[serde(rename = "geometricError")]
     pub geometric_error: f64,
     ///An object that describes the implicit subdivision of this tile.
-    #[serde(
-        rename = "implicitTiling",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implicit_tiling: Option<ImplicitTiling>,
     ///A metadata entity that is associated with this tile.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1338,22 +1671,45 @@ pub struct Tile {
     #[serde(default = "default_tile_transform")]
     pub transform: [f64; 16],
     ///Optional bounding volume that defines the volume the viewer shall be inside of before the tile's content will be requested and before the tile will be refined based on geometricError.
-    #[serde(
-        rename = "viewerRequestVolume",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewer_request_volume: Option<BoundingVolume>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
+}
+impl Default for Tile {
+    fn default() -> Self {
+        Self {
+            bounding_volume: Default::default(),
+            children: Default::default(),
+            content: Default::default(),
+            contents: Default::default(),
+            geometric_error: Default::default(),
+            implicit_tiling: Default::default(),
+            metadata: Default::default(),
+            refine: Default::default(),
+            transform: default_tile_transform(),
+            viewer_request_volume: Default::default(),
+            extensions: Default::default(),
+            extras: Default::default(),
+        }
+    }
 }
 fn default_tile_transform() -> [f64; 16] {
     [
         1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
     ]
+}
+impl crate::HasExtensions for Tile {
+    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
+        &self.extensions
+    }
+    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
+        &mut self.extensions
+    }
 }
 ///A 3D Tiles tileset.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -1363,7 +1719,6 @@ pub struct Tileset {
     pub asset: Asset,
     ///Names of 3D Tiles extensions required to properly load this tileset. Each element of this array shall also be contained in `extensionsUsed`.
     #[serde(
-        rename = "extensionsRequired",
         default,
         skip_serializing_if = "is_empty_collection",
         deserialize_with = "deserialize_null_default"
@@ -1371,14 +1726,12 @@ pub struct Tileset {
     pub extensions_required: Vec<Box<str>>,
     ///Names of 3D Tiles extensions used somewhere in this tileset.
     #[serde(
-        rename = "extensionsUsed",
         default,
         skip_serializing_if = "is_empty_collection",
         deserialize_with = "deserialize_null_default"
     )]
     pub extensions_used: Vec<Box<str>>,
     ///The error, in meters, introduced if this tileset is not rendered. At runtime, the geometric error is used to compute screen space error (SSE), i.e., the error measured in pixels.
-    #[serde(rename = "geometricError")]
     pub geometric_error: f64,
     ///An array of groups that tile content may belong to. Each element of this array is a metadata entity that describes the group. The tile content `group` property is an index into this array.
     #[serde(
@@ -1403,304 +1756,17 @@ pub struct Tileset {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema: Option<Schema>,
     ///The URI (or IRI) of the external schema file. When this is defined, then `schema` shall be undefined.
-    #[serde(rename = "schemaUri", default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema_uri: Option<Box<str>>,
     ///An object containing statistics about metadata entities.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub statistics: Option<Statistics>,
     ///Extension-specific data.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub extensions: std::collections::HashMap<String, serde_json::Value>,
     ///Application-specific data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extras: Option<serde_json::Value>,
-}
-impl crate::HasExtensions for Asset {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Availability {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for BatchTable {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for BatchTableBinaryBodyReference {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Batched3dModelFeatureTable {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for BinaryBodyOffset {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for BoundingVolume {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Buffer {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for BufferView {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Class {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for ClassProperty {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for ClassStatistics {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Conditions {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Content {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Enum {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for EnumValue {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Extension {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for FeatureTable {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for FeatureTableBinaryBodyReference {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Group {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for ImplicitTiling {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Instanced3dModelFeatureTable {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Meta {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for MetadataEntity {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for PointCloudFeatureTable {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for PointCloudStyle {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Properties {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for PropertyStatistics {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for PropertyTable {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for PropertyTableProperty {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Schema {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Statistics {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Style {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Subtree {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Subtrees {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
-}
-impl crate::HasExtensions for Tile {
-    fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extensions
-    }
-    fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value> {
-        &mut self.extensions
-    }
 }
 impl crate::HasExtensions for Tileset {
     fn extensions(&self) -> &std::collections::HashMap<String, serde_json::Value> {
