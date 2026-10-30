@@ -1,17 +1,13 @@
-# tairu
+# Tairu
 
-*tairu* ("tile") is a Rust crate for working with [3D Tiles 1.0/1.1](https://github.com/CesiumGS/3d-tiles/tree/main/specification) assets in memory.
+The [3D Tiles 1.0/1.1 specification](https://github.com/CesiumGS/3d-tiles/tree/main/specification)
+as Rust data and common wire-format utilities.
 
-## Features
-
-- **Generated types** - auto-generated Rust structs covering the full 3D Tiles JSON schema.
-- **Parsing** - parse and validate `tileset.json` from slices, strings, or readers (`from_slice`, `from_str`, `from_reader`), returning the crate-wide `Error`.
-- **Traversal** - walk a tileset, including external tilesets with cycle detection, with resolved world transforms (`walk`, `TileVisit`).
-- **Implicit tiling** - quadtree/octree availability with Morton-index random access (`QuadtreeAvailability`, `OctreeAvailability`, `SubtreeAvailability`), and binary/JSON subtree parsing through `SubtreeAvailability::from_bytes`.
-- **Writing** - serialize tilesets, subtrees, and metadata schemas (`TilesetWriter`, `SubtreeWriter`, `SchemaWriter`) with idiomatic `Result<Vec<u8>, Error>` APIs.
-- **Typed extensions** - read/write vendor extensions as typed values (`Extension`, `HasExtensions`).
-
-## Quick start
+The crate provides generated schema types, synchronous parsing and
+serialization over caller-supplied bytes/readers/writers, validation,
+typed extensions, and implicit-tiling availability and subtree layouts.
+It has no feature flags, resource acquisition, filesystem or archive backend,
+runtime, or worker pool.
 
 ```rust
 use tairu::from_str;
@@ -28,13 +24,37 @@ let json = r#"{
 }"#;
 
 let tileset = from_str(json).unwrap();
-assert_eq!(tileset.asset.version, "1.1");
-
-let mut uris = Vec::new();
-tileset.for_each_content(|content| uris.push(content.uri.clone()));
-assert_eq!(uris, ["root.b3dm"]);
+assert_eq!(tileset.asset.version.as_ref(), "1.1");
 ```
+
+Parsing rejects invalid required data. `from_str_with_diagnostics` (and the
+corresponding slice, reader, and named tileset functions) also returns
+non-fatal findings with stable codes, JSON-style paths, and messages.
+The crate does not select a reporting policy.
+
+## Application workflows
+
+[Hiera](https://docs.rs/hiera) supplies resource acquisition, hierarchy
+navigation, glTF integration, and package publication under application-owned
+execution and byte admission. Applications can depend on Hiera alone:
+
+```toml
+[dependencies]
+hiera = { version = "0.2", features = ["tairu"] }
+```
+
+`hiera::tairu` re-exports this crate's types and utilities alongside
+`TilesetHierarchy`, `TilesetNavigator`, and the other adapters.
+Its `SpecError` is `tairu::Error`; its `Error` describes adapter failures.
+Hiera's `tairu-scene` feature adds standard transform/refinement resolution,
+`moderu` enables glTF model integration, and `tairu-package` adds 3TZ storage.
+No archive, runtime, or worker pool is selected by enabling `tairu`.
+
+## Development
+
+Generated modules are checked in. Building the crate does not require the
+schema submodules or development-only `xtask` generator.
 
 ## License
 
-Apache License 2.0, see [LICENSE](LICENSE) for details.
+Apache License 2.0. See [LICENSE](LICENSE).

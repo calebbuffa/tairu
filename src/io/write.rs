@@ -1,11 +1,11 @@
-//! Writers for 3D Tiles objects - [`TilesetWriter`], [`SubtreeWriter`], [`SchemaWriter`].
+//! Serialization for 3D Tiles objects.
 //!
 //! Writers return ordinary [`crate::Error`] values for serialization failures.
 //!
 //! # Tileset example
 //!
 //! ```no_run
-//! use tairu::{Tileset, Asset, Tile, BoundingVolume, Refine, TilesetWriter, WriteOptions};
+//! use tairu::{Tileset, Asset, Tile, BoundingVolume, Refine, write_tileset, WriteOptions};
 //!
 //! let tileset = Tileset {
 //!     asset: Asset { version: "1.1".into(), ..Default::default() },
@@ -19,7 +19,7 @@
 //!     ..Default::default()
 //! };
 //!
-//! let bytes = TilesetWriter::write_tileset(&tileset, WriteOptions::default()).unwrap();
+//! let bytes = write_tileset(&tileset, WriteOptions::default()).unwrap();
 //! std::fs::write("tileset.json", &bytes).unwrap();
 //! ```
 //!
@@ -46,9 +46,6 @@ use crate::generated::{Buffer, Schema, Subtree, Tileset};
 /// Minimal append-only byte buffer writer.
 struct BufferWriter(Vec<u8>);
 impl BufferWriter {
-    fn new() -> Self {
-        Self(Vec::new())
-    }
     fn with_capacity(n: usize) -> Self {
         Self(Vec::with_capacity(n))
     }
@@ -87,14 +84,9 @@ pub struct WriteOptions {
     pub pretty_print: bool,
 }
 
-/// Serializes a [`Tileset`] to JSON bytes.
-pub struct TilesetWriter;
-
-impl TilesetWriter {
-    /// Serialize a tileset to JSON.
-    pub fn write_tileset(tileset: &Tileset, opts: WriteOptions) -> Result<Vec<u8>, crate::Error> {
-        serialize(tileset, opts.pretty_print, "tileset")
-    }
+/// Serializes a tileset to JSON bytes.
+pub fn write_tileset(tileset: &Tileset, opts: WriteOptions) -> Result<Vec<u8>, crate::Error> {
+    serialize(tileset, opts.pretty_print, "tileset")
 }
 
 /// Serializes a [`Subtree`] to JSON or the binary `.subtree` envelope.
@@ -120,10 +112,7 @@ impl SubtreeWriter {
         subtree: &Subtree,
         opts: WriteOptions,
     ) -> Result<Vec<u8>, crate::Error> {
-        let bytes = serialize(subtree, opts.pretty_print, "subtree")?;
-        let mut w = BufferWriter::new();
-        w.write_bytes(&bytes);
-        Ok(w.finish())
+        serialize(subtree, opts.pretty_print, "subtree")
     }
 
     /// Serialize a subtree to the binary `.subtree` envelope.
@@ -175,14 +164,9 @@ impl SubtreeWriter {
     }
 }
 
-/// Serializes a [`Schema`] (3D Tiles metadata schema) to JSON bytes.
-pub struct SchemaWriter;
-
-impl SchemaWriter {
-    /// Serialize a schema to JSON.
-    pub fn write_schema(schema: &Schema, opts: WriteOptions) -> Result<Vec<u8>, crate::Error> {
-        serialize(schema, opts.pretty_print, "schema")
-    }
+/// Serializes a schema (3D Tiles metadata schema) to JSON bytes.
+pub fn write_schema(schema: &Schema, opts: WriteOptions) -> Result<Vec<u8>, crate::Error> {
+    serialize(schema, opts.pretty_print, "schema")
 }
 
 fn serialize<T: serde::Serialize>(
@@ -230,7 +214,7 @@ mod tests {
     #[test]
     fn tileset_round_trip() {
         let ts = make_tileset();
-        let r = TilesetWriter::write_tileset(&ts, WriteOptions::default());
+        let r = write_tileset(&ts, WriteOptions::default());
         let bytes = r.unwrap();
         let result = from_slice(&bytes);
         let ts2 = result.expect("round-trip parse failed");
@@ -242,7 +226,7 @@ mod tests {
     #[test]
     fn tileset_pretty_print() {
         let ts = make_tileset();
-        let r = TilesetWriter::write_tileset(&ts, WriteOptions { pretty_print: true });
+        let r = write_tileset(&ts, WriteOptions { pretty_print: true });
         let bytes = r.unwrap();
         assert!(bytes.contains(&b'\n'));
     }
@@ -306,7 +290,7 @@ mod tests {
             .collect(),
             ..Default::default()
         };
-        let r = SchemaWriter::write_schema(&schema, WriteOptions::default());
+        let r = write_schema(&schema, WriteOptions::default());
         let bytes = r.unwrap();
         let parsed: Schema = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(&*parsed.id, "test-schema");

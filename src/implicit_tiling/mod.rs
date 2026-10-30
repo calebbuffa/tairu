@@ -5,7 +5,6 @@ mod bounds;
 mod subtree;
 
 pub use availability::{
-    AvailabilityNode, AvailabilityView, OctreeAvailability, OctreeAvailabilityNode, OctreeTileId,
-    QuadtreeAvailability, QuadtreeTileId, SubtreeAvailability, SubtreeTileId,
-    TileAvailabilityFlags,
+    AvailabilityView, OctreeAvailability, OctreeTileId, QuadtreeAvailability, QuadtreeTileId,
+    SubtreeAvailability, SubtreeTileId, TileAvailabilityFlags,
 };

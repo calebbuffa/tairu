@@ -1,23 +1,12 @@
 //! Unified error type for tairu operations.
 //!
-//! All tairu public API operations return a single [`Error`] type,
-//! though internally we may compose multiple specialized error types.
+//! Covers parsing, validation, and serialization of specification data.
 
 use std::io;
 
 /// All errors that can occur in tairu operations.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// Failed to fetch a resource.
-    #[error("failed to fetch {uri}: {source}")]
-    Fetch {
-        /// The URI that could not be fetched.
-        uri: String,
-        /// The underlying transport error.
-        #[source]
-        source: Box<dyn std::error::Error + Send + Sync>,
-    },
-
     /// A JSON or schema document failed to parse or validate.
     #[error("failed to parse {uri}: {message}")]
     Parse {
@@ -51,25 +40,9 @@ pub enum Error {
         /// The unsupported scheme label.
         scheme: &'static str,
     },
-
-    /// A CPU job submitted to a caller-provided [`hiera::Spawner`] failed.
-    #[error("spawned parse job failed: {0}")]
-    Spawn(#[source] hiera::SpawnError),
 }
 
 impl Error {
-    /// Create a fetch error from an underlying transport error.
-    pub(crate) fn fetch(
-        uri: impl Into<String>,
-        source: impl Into<Box<dyn std::error::Error + Send + Sync>>,
-    ) -> Self {
-        Error::Fetch {
-            uri: uri.into(),
-            source: source.into(),
-        }
-    }
-
-    /// Create a tile parse error.
     /// Creates an error for invalid source or extension data.
     pub fn parse(uri: impl Into<String>, message: impl Into<String>) -> Self {
         Error::Parse {
@@ -79,19 +52,14 @@ impl Error {
     }
 
     /// Create a subtree parse error.
-    pub(crate) fn subtree(message: impl Into<String>) -> Self {
+    pub fn subtree(message: impl Into<String>) -> Self {
         Error::Subtree {
             message: message.into(),
         }
     }
 
     /// Create an unsupported implicit-subdivision error.
-    pub(crate) fn unsupported_implicit_subdivision(scheme: &'static str) -> Self {
+    pub fn unsupported_implicit_subdivision(scheme: &'static str) -> Self {
         Error::UnsupportedImplicitSubdivision { scheme }
-    }
-
-    /// Create a spawn error from a failed [`hiera::Spawner`] job.
-    pub(crate) fn spawn(source: hiera::SpawnError) -> Self {
-        Error::Spawn(source)
     }
 }

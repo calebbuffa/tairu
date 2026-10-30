@@ -6,7 +6,10 @@ use crate::Error;
 use serde::{Serialize, de::DeserializeOwned};
 
 /// Trait for types that represent a named 3D Tiles extension payload.
-pub trait Extension: Sized + Serialize + DeserializeOwned {
+///
+/// Reading requires `DeserializeOwned`; writing requires `Serialize`.
+/// Presence checks and removal require only this extension identity.
+pub trait Extension {
     /// Extension key in the `extensions` map.
     const NAME: &'static str;
 }
@@ -20,16 +23,14 @@ pub trait HasExtensions {
     fn extensions_mut(&mut self) -> &mut std::collections::HashMap<String, serde_json::Value>;
 
     /// Deserialize extension payload by type.
-    fn extension<E: Extension>(&self) -> Result<Option<E>, Error> {
+    fn extension<E: Extension + DeserializeOwned>(&self) -> Result<Option<E>, Error> {
         match self.extensions().get(E::NAME) {
-            Some(value) => serde_json::from_value(value.clone())
-                .map(Some)
-                .map_err(|error| {
-                    Error::parse(
-                        "<extension>",
-                        format!("failed to decode extension {}: {}", E::NAME, error),
-                    )
-                }),
+            Some(value) => E::deserialize(value).map(Some).map_err(|error| {
+                Error::parse(
+                    "<extension>",
+                    format!("failed to decode extension {}: {}", E::NAME, error),
+                )
+            }),
             None => Ok(None),
         }
     }
@@ -40,7 +41,7 @@ pub trait HasExtensions {
     }
 
     /// Encode and insert extension payload by type.
-    fn set_extension<E: Extension>(&mut self, ext: E) -> Result<(), Error> {
+    fn set_extension<E: Extension + Serialize>(&mut self, ext: E) -> Result<(), Error> {
         let value = serde_json::to_value(ext).map_err(|error| {
             Error::parse(
                 "<extension>",
@@ -69,6 +70,33 @@ mod tests {
 
     impl Extension for TestExt {
         const NAME: &'static str = "TEST_extension";
+    }
+
+    #[test]
+    fn extension_capabilities_are_independent() {
+        #[derive(serde::Serialize)]
+        struct WriteOnly {
+            value: i64,
+        }
+        #[derive(serde::Deserialize)]
+        struct ReadOnly {
+            value: i64,
+        }
+        struct IdentityOnly;
+        impl Extension for WriteOnly {
+            const NAME: &'static str = "TEST_capabilities";
+        }
+        impl Extension for ReadOnly {
+            const NAME: &'static str = WriteOnly::NAME;
+        }
+        impl Extension for IdentityOnly {
+            const NAME: &'static str = WriteOnly::NAME;
+        }
+        let mut tile = Tile::default();
+        tile.set_extension(WriteOnly { value: 42 }).unwrap();
+        assert!(tile.has_extension::<IdentityOnly>());
+        assert_eq!(tile.extension::<ReadOnly>().unwrap().unwrap().value, 42);
+        assert!(tile.remove_extension::<IdentityOnly>());
     }
 
     #[test]

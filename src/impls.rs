@@ -4,7 +4,6 @@
 //! generated structs without any trait import.
 
 use crate::generated::{Content, Tile, Tileset};
-use crate::uri::is_external_tileset_uri;
 
 impl Tile {
     /// Iterate every tile in the subtree rooted at `self` (depth-first,
@@ -15,7 +14,7 @@ impl Tile {
         self.for_each_tile_with(&mut f);
     }
 
-    fn for_each_tile_with(&self, f: &mut dyn FnMut(&Tile)) {
+    fn for_each_tile_with<F: FnMut(&Tile)>(&self, f: &mut F) {
         f(self);
         for child in &self.children {
             child.for_each_tile_with(f);
@@ -27,7 +26,7 @@ impl Tile {
         self.for_each_tile_mut_with(&mut f);
     }
 
-    fn for_each_tile_mut_with(&mut self, f: &mut dyn FnMut(&mut Tile)) {
+    fn for_each_tile_mut_with<F: FnMut(&mut Tile)>(&mut self, f: &mut F) {
         f(self);
         for child in &mut self.children {
             child.for_each_tile_mut_with(f);
@@ -42,7 +41,7 @@ impl Tile {
         self.for_each_content_with(&mut f);
     }
 
-    fn for_each_content_with(&self, f: &mut dyn FnMut(&Content)) {
+    fn for_each_content_with<F: FnMut(&Content)>(&self, f: &mut F) {
         if let Some(c) = &self.content {
             f(c);
         }
@@ -59,7 +58,7 @@ impl Tile {
         self.for_each_content_mut_with(&mut f);
     }
 
-    fn for_each_content_mut_with(&mut self, f: &mut dyn FnMut(&mut Content)) {
+    fn for_each_content_mut_with<F: FnMut(&mut Content)>(&mut self, f: &mut F) {
         if let Some(c) = &mut self.content {
             f(c);
         }
@@ -70,51 +69,9 @@ impl Tile {
             child.for_each_content_mut_with(f);
         }
     }
-
-    /// Returns `true` if this tile is a leaf tile.
-    ///
-    /// A leaf tile has:
-    /// - No child tiles
-    /// - No implicit tiling
-    /// - No external tileset links in its content
-    pub fn is_leaf(&self) -> bool {
-        // Not a leaf if has children or implicit tiling
-        if !self.children.is_empty() || self.implicit_tiling.is_some() {
-            return false;
-        }
-
-        // Check that no content links to an external tileset
-        let has_external_tileset = self
-            .content
-            .iter()
-            .chain(&self.contents)
-            .any(|c| is_external_tileset_uri(&c.uri));
-
-        !has_external_tileset
-    }
 }
 
 impl Tileset {
-    /// Iterate every tile in the tileset tree (depth-first, pre-order).
-    pub fn for_each_tile<F: FnMut(&Tile)>(&self, mut f: F) {
-        self.root.for_each_tile(&mut f);
-    }
-
-    /// Mutable variant of [`for_each_tile`](Self::for_each_tile).
-    pub fn for_each_tile_mut<F: FnMut(&mut Tile)>(&mut self, mut f: F) {
-        self.root.for_each_tile_mut(&mut f);
-    }
-
-    /// Iterate every [`Content`] in the tileset tree (depth-first, pre-order).
-    pub fn for_each_content<F: FnMut(&Content)>(&self, mut f: F) {
-        self.root.for_each_content(&mut f);
-    }
-
-    /// Mutable variant of [`for_each_content`](Self::for_each_content).
-    pub fn for_each_content_mut<F: FnMut(&mut Content)>(&mut self, mut f: F) {
-        self.root.for_each_content_mut(&mut f);
-    }
-
     /// Declare that an extension is used somewhere in this tileset.
     ///
     /// Idempotent - calling multiple times with the same name is safe.
@@ -199,7 +156,7 @@ mod tests {
     fn for_each_tile_visits_all() {
         let ts = tree();
         let mut uris: Vec<String> = Vec::new();
-        ts.for_each_content(|c| uris.push(c.uri.to_string()));
+        ts.root.for_each_content(|c| uris.push(c.uri.to_string()));
         assert_eq!(uris, ["root.glb", "child_a.glb", "child_b.glb"]);
     }
 
@@ -207,7 +164,7 @@ mod tests {
     fn for_each_tile_count() {
         let ts = tree();
         let mut count = 0;
-        ts.for_each_tile(|_| count += 1);
+        ts.root.for_each_tile(|_| count += 1);
         assert_eq!(count, 3); // root + 2 children
     }
 

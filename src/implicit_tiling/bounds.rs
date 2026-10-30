@@ -1,19 +1,20 @@
 use super::{OctreeTileId, QuadtreeTileId};
 use crate::generated::BoundingVolume;
-use crate::uri::Uri;
 
 impl QuadtreeTileId {
-    /// Resolve an implicit tiling URL template for this tile against `base`.
-    pub fn resolve_url(self, base: &Uri, template: &str) -> Uri {
-        let expanded = expand_tile_url(
+    /// Expands an implicit tiling URL template for this tile.
+    ///
+    /// The result is relative to the declaring tileset unless the template is
+    /// absolute; resolving it is the transport layer's concern.
+    pub fn expand_url(self, template: &str) -> String {
+        expand_tile_url(
             template,
             &[
                 ("level", &self.level.to_string()),
                 ("x", &self.x.to_string()),
                 ("y", &self.y.to_string()),
             ],
-        );
-        base.resolve(&expanded)
+        )
     }
 
     /// Subdivide `root` to the child bounding volume at this tile's coordinates.
@@ -40,21 +41,17 @@ impl QuadtreeTileId {
             out.r#box = Some(subdivide_obb_quad(box_values, self.x, self.y, d));
             return out;
         }
-        if let Some(sphere) = root.sphere.as_ref() {
-            // conservative: bound the OBB child as a sphere
-            let fake_box = sphere_to_isotropic_box(sphere);
-            let child_box = subdivide_obb_quad(&fake_box, self.x, self.y, d);
-            out.sphere = Some(obb_bounding_sphere(&child_box));
-            return out;
-        }
         out
     }
 }
 
 impl OctreeTileId {
-    /// Resolve an implicit tiling URL template for this tile against `base`.
-    pub fn resolve_url(self, base: &Uri, template: &str) -> Uri {
-        let expanded = expand_tile_url(
+    /// Expands an implicit tiling URL template for this tile.
+    ///
+    /// The result is relative to the declaring tileset unless the template is
+    /// absolute; resolving it is the transport layer's concern.
+    pub fn expand_url(self, template: &str) -> String {
+        expand_tile_url(
             template,
             &[
                 ("level", &self.level.to_string()),
@@ -62,8 +59,7 @@ impl OctreeTileId {
                 ("y", &self.y.to_string()),
                 ("z", &self.z.to_string()),
             ],
-        );
-        base.resolve(&expanded)
+        )
     }
 
     /// Subdivide `root` to the child bounding volume at this tile's coordinates.
@@ -88,12 +84,6 @@ impl OctreeTileId {
         }
         if let Some(box_values) = root.r#box.as_ref() {
             out.r#box = Some(subdivide_obb_oct(box_values, self.x, self.y, self.z, d));
-            return out;
-        }
-        if let Some(sphere) = root.sphere.as_ref() {
-            let fake_box = sphere_to_isotropic_box(sphere);
-            let child_box = subdivide_obb_oct(&fake_box, self.x, self.y, self.z, d);
-            out.sphere = Some(obb_bounding_sphere(&child_box));
             return out;
         }
         out
@@ -127,10 +117,6 @@ impl Vec3 {
 
     fn scale(self, factor: f64) -> Self {
         Self::new(self.x * factor, self.y * factor, self.z * factor)
-    }
-
-    fn length(self) -> f64 {
-        self.x.hypot(self.y).hypot(self.z)
     }
 }
 
@@ -195,21 +181,6 @@ fn subdivide_obb_oct(b: &[f64], tx: u32, ty: u32, tz: u32, d: f64) -> [f64; 12] 
     ]
 }
 
-// Treat a sphere (cx,cy,cz,r) as an axis-aligned box with half-axes r along each axis.
-fn sphere_to_isotropic_box(s: &[f64]) -> [f64; 12] {
-    let r = s[3];
-    [s[0], s[1], s[2], r, 0.0, 0.0, 0.0, r, 0.0, 0.0, 0.0, r]
-}
-
-// Minimum bounding sphere of an OBB: center at OBB center, radius = length of half-diagonal.
-fn obb_bounding_sphere(b: &[f64]) -> [f64; 4] {
-    let xh = Vec3::new(b[3], b[4], b[5]);
-    let yh = Vec3::new(b[6], b[7], b[8]);
-    let zh = Vec3::new(b[9], b[10], b[11]);
-    let r = xh.add(yh).add(zh).length();
-    [b[0], b[1], b[2], r]
-}
-
 fn expand_tile_url(template: &str, vars: &[(&str, &str)]) -> String {
     let mut out = template.to_string();
     for (k, v) in vars {
@@ -221,38 +192,16 @@ fn expand_tile_url(template: &str, vars: &[(&str, &str)]) -> String {
 #[cfg(test)]
 mod tests {
     use super::{OctreeTileId, QuadtreeTileId};
-    use crate::uri::Uri;
 
     #[test]
-    fn test_resolve_url_quad() {
-        let tile = QuadtreeTileId::new(3, 5, 2);
-        let base = Uri::parse("https://example.com/tileset/tileset.json");
-        let url = tile.resolve_url(&base, "subtrees/{level}/{x}/{y}.subtree");
-        assert_eq!(
-            url.to_string(),
-            "https://example.com/tileset/subtrees/3/5/2.subtree"
-        );
+    fn expands_quadtree_template() {
+        let url = QuadtreeTileId::new(3, 5, 2).expand_url("subtrees/{level}/{x}/{y}.subtree");
+        assert_eq!(url, "subtrees/3/5/2.subtree");
     }
 
     #[test]
-    fn test_resolve_url_oct() {
-        let tile = OctreeTileId::new(2, 1, 3, 0);
-        let base = Uri::parse("https://example.com/tileset.json");
-        let url = tile.resolve_url(&base, "subtrees/{level}/{x}/{y}/{z}.subtree");
-        assert_eq!(
-            url.to_string(),
-            "https://example.com/subtrees/2/1/3/0.subtree"
-        );
-    }
-
-    #[test]
-    fn test_resolve_url_absolute_passthrough() {
-        let tile = QuadtreeTileId::new(0, 0, 0);
-        let base = Uri::parse("https://example.com/tileset.json");
-        let url = tile.resolve_url(
-            &base,
-            "https://cdn.example.com/subtrees/{level}/{x}/{y}.subtree",
-        );
-        assert!(url.to_string().starts_with("https://cdn.example.com/"));
+    fn expands_octree_template() {
+        let url = OctreeTileId::new(2, 1, 3, 0).expand_url("subtrees/{level}/{x}/{y}/{z}.subtree");
+        assert_eq!(url, "subtrees/2/1/3/0.subtree");
     }
 }

@@ -272,7 +272,7 @@ fn build_availability(
 
     let content_av: Result<Vec<AvailabilityView>, _> = if json.content_availability.is_empty() {
         // Spec says contentAvailability may be omitted - default to all-unavailable.
-        Ok(vec![AvailabilityView::Constant(false)])
+        Ok(Vec::new())
     } else {
         json.content_availability.iter().map(resolve).collect()
     };

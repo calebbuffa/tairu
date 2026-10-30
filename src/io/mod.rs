@@ -1,9 +1,8 @@
-mod loader;
 mod read;
-mod reader;
 mod write;
 
-pub use loader::{ContentRef, LoadedContent, TileBounds, TileInfo, TileRef, TilesetLoader};
-pub use read::{from_reader, from_slice, from_str};
-pub use reader::TilesetReader;
-pub use write::{SchemaWriter, SubtreeWriter, TilesetWriter, WriteOptions};
+pub use read::{
+    from_reader, from_reader_with_diagnostics, from_slice, from_slice_with_diagnostics, from_str,
+    from_str_with_diagnostics, parse_tileset, parse_tileset_with_diagnostics,
+};
+pub use write::{SubtreeWriter, WriteOptions, write_schema, write_tileset};
