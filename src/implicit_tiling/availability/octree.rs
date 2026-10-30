@@ -1,5 +1,83 @@
 use super::*;
 
+/// Octree tile coordinates - local to avoid external math-library deps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct OctreeTileId {
+    /// Level within the octree (0 = root).
+    pub level: u32,
+    /// X coordinate at this level.
+    pub x: u32,
+    /// Y coordinate at this level.
+    pub y: u32,
+    /// Z coordinate at this level.
+    pub z: u32,
+}
+
+impl OctreeTileId {
+    /// Construct a tile ID from its level and coordinates.
+    pub fn new(level: u32, x: u32, y: u32, z: u32) -> Self {
+        Self { level, x, y, z }
+    }
+
+    /// Morton index for (x, y, z) within this tile's level.
+    pub fn morton_index(self) -> u64 {
+        morton_3d(self.x, self.y, self.z) as u64
+    }
+
+    /// Tile coordinates relative to the given subtree-root tile.
+    pub fn relative_to(self, subtree_id: Self) -> Self {
+        debug_assert!(self.level >= subtree_id.level);
+        let diff = self.level - subtree_id.level;
+        Self {
+            level: diff,
+            x: self.x.wrapping_sub(subtree_id.x << diff),
+            y: self.y.wrapping_sub(subtree_id.y << diff),
+            z: self.z.wrapping_sub(subtree_id.z << diff),
+        }
+    }
+
+    /// Morton index of `child` relative to this subtree's bottom level.
+    pub fn relative_morton_index(self, child: Self) -> u64 {
+        let rel = child.relative_to(self);
+        morton_3d(rel.x, rel.y, rel.z) as u64
+    }
+
+    /// The eight child tile IDs at `level + 1`, in Morton order.
+    pub fn children(self) -> [OctreeTileId; 8] {
+        let cl = self.level + 1;
+        let (bx, by, bz) = (self.x * 2, self.y * 2, self.z * 2);
+        [
+            OctreeTileId::new(cl, bx, by, bz),
+            OctreeTileId::new(cl, bx + 1, by, bz),
+            OctreeTileId::new(cl, bx, by + 1, bz),
+            OctreeTileId::new(cl, bx + 1, by + 1, bz),
+            OctreeTileId::new(cl, bx, by, bz + 1),
+            OctreeTileId::new(cl, bx + 1, by, bz + 1),
+            OctreeTileId::new(cl, bx, by + 1, bz + 1),
+            OctreeTileId::new(cl, bx + 1, by + 1, bz + 1),
+        ]
+    }
+
+    /// The root tile ID of the fixed-size subtree that contains this tile.
+    pub fn subtree_root(self, subtree_levels: u32) -> OctreeTileId {
+        if subtree_levels == 0 {
+            return self;
+        }
+        let subtree_level = (self.level / subtree_levels) * subtree_levels;
+        let d = self.level - subtree_level;
+        OctreeTileId::new(subtree_level, self.x >> d, self.y >> d, self.z >> d)
+    }
+}
+
+impl SubtreeTileId for OctreeTileId {
+    const SCHEME: SubdivisionScheme = SubdivisionScheme::Octree;
+
+    fn relative_position(self, subtree_id: Self) -> (u32, u64) {
+        let relative = self.relative_to(subtree_id);
+        (relative.level, relative.morton_index())
+    }
+}
+
 /// Insert two 0-bits of spacing between each bit of a 10-bit value.
 #[inline]
 pub(super) fn spread3(mut i: u32) -> u32 {
@@ -271,5 +349,27 @@ impl OctreeAvailability {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn morton_3d_root_is_zero() {
+        assert_eq!(morton_3d(0, 0, 0), 0);
+    }
+
+    #[test]
+    fn morton_3d_axes_independent() {
+        // x=1,y=0,z=0 -> bit0 of each coordinate -> spread3(1)|0|0 = 1
+        assert_eq!(morton_3d(1, 0, 0), 1);
+        // x=0,y=1,z=0 -> 0|spread3(1)<<1|0 = 2
+        assert_eq!(morton_3d(0, 1, 0), 2);
+        // x=0,y=0,z=1 -> 0|0|spread3(1)<<2 = 4
+        assert_eq!(morton_3d(0, 0, 1), 4);
+        // x=1,y=1,z=1 -> 1|2|4 = 7
+        assert_eq!(morton_3d(1, 1, 1), 7);
     }
 }

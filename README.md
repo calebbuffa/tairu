@@ -1,13 +1,17 @@
 # Tairu
 
-The [3D Tiles 1.0/1.1 specification](https://github.com/CesiumGS/3d-tiles/tree/main/specification)
-as Rust data and common wire-format utilities.
+Rust implementation of [3D Tiles 1.0 and 1.1](https://github.com/CesiumGS/3d-tiles/tree/main/specification).
 
-The crate provides generated schema types, synchronous parsing and
-serialization over caller-supplied bytes/readers/writers, validation,
-typed extensions, and implicit-tiling availability and subtree layouts.
-It has no feature flags, resource acquisition, filesystem or archive backend,
-runtime, or worker pool.
+## Installation
+
+```toml
+[dependencies]
+tairu = "0.2"
+```
+
+Requires Rust 1.85.
+
+## Parse a tileset
 
 ```rust
 use tairu::from_str;
@@ -30,30 +34,25 @@ assert_eq!(tileset.asset.version.as_ref(), "1.1");
 Parsing rejects invalid required data. `from_str_with_diagnostics` (and the
 corresponding slice, reader, and named tileset functions) also returns
 non-fatal findings with stable codes, JSON-style paths, and messages.
-The crate does not select a reporting policy.
+Use `write_tileset` with `WriteOptions` to serialize a tileset.
 
-## Application workflows
+## What's included
 
-[Hiera](https://docs.rs/hiera) supplies resource acquisition, hierarchy
-navigation, glTF integration, and package publication under application-owned
-execution and byte admission. Applications can depend on Hiera alone:
+- Generated schema types, including `Tileset`, `Tile`, and `BoundingVolume`,
+  re-exported at the crate root.
+- Parsing from strings, byte slices, and synchronous readers.
+- Specification validation and structured diagnostics.
+- Typed extension access through `Extension` and `HasExtensions`.
+- Quadtree and octree availability, subtree decoding, and `SubtreeWriter`
+  serialization.
 
-```toml
-[dependencies]
-hiera = { version = "0.2", features = ["tairu"] }
-```
-
-`hiera::tairu` re-exports this crate's types and utilities alongside
-`TilesetHierarchy`, `TilesetNavigator`, and the other adapters.
-Its `SpecError` is `tairu::Error`; its `Error` describes adapter failures.
-Hiera's `tairu-scene` feature adds standard transform/refinement resolution,
-`moderu` enables glTF model integration, and `tairu-package` adds 3TZ storage.
-No archive, runtime, or worker pool is selected by enabling `tairu`.
+See the [API documentation](https://docs.rs/tairu)
+for parsing, validation, and subtree utilities.
 
 ## Development
 
-Generated modules are checked in. Building the crate does not require the
-schema submodules or development-only `xtask` generator.
+Generated types are checked in. The development-only `xtask` toolchain
+regenerates them from the schema submodules.
 
 ## License
 

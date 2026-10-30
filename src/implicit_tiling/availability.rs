@@ -104,84 +104,6 @@ impl SubtreeTileId for QuadtreeTileId {
     }
 }
 
-/// Octree tile coordinates - local to avoid external math-library deps.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct OctreeTileId {
-    /// Level within the octree (0 = root).
-    pub level: u32,
-    /// X coordinate at this level.
-    pub x: u32,
-    /// Y coordinate at this level.
-    pub y: u32,
-    /// Z coordinate at this level.
-    pub z: u32,
-}
-
-impl OctreeTileId {
-    /// Construct a tile ID from its level and coordinates.
-    pub fn new(level: u32, x: u32, y: u32, z: u32) -> Self {
-        Self { level, x, y, z }
-    }
-
-    /// Morton index for (x, y, z) within this tile's level.
-    pub fn morton_index(self) -> u64 {
-        morton_3d(self.x, self.y, self.z) as u64
-    }
-
-    /// Tile coordinates relative to the given subtree-root tile.
-    pub fn relative_to(self, subtree_id: Self) -> Self {
-        debug_assert!(self.level >= subtree_id.level);
-        let diff = self.level - subtree_id.level;
-        Self {
-            level: diff,
-            x: self.x.wrapping_sub(subtree_id.x << diff),
-            y: self.y.wrapping_sub(subtree_id.y << diff),
-            z: self.z.wrapping_sub(subtree_id.z << diff),
-        }
-    }
-
-    /// Morton index of `child` relative to this subtree's bottom level.
-    pub fn relative_morton_index(self, child: Self) -> u64 {
-        let rel = child.relative_to(self);
-        morton_3d(rel.x, rel.y, rel.z) as u64
-    }
-
-    /// The eight child tile IDs at `level + 1`, in Morton order.
-    pub fn children(self) -> [OctreeTileId; 8] {
-        let cl = self.level + 1;
-        let (bx, by, bz) = (self.x * 2, self.y * 2, self.z * 2);
-        [
-            OctreeTileId::new(cl, bx, by, bz),
-            OctreeTileId::new(cl, bx + 1, by, bz),
-            OctreeTileId::new(cl, bx, by + 1, bz),
-            OctreeTileId::new(cl, bx + 1, by + 1, bz),
-            OctreeTileId::new(cl, bx, by, bz + 1),
-            OctreeTileId::new(cl, bx + 1, by, bz + 1),
-            OctreeTileId::new(cl, bx, by + 1, bz + 1),
-            OctreeTileId::new(cl, bx + 1, by + 1, bz + 1),
-        ]
-    }
-
-    /// The root tile ID of the fixed-size subtree that contains this tile.
-    pub fn subtree_root(self, subtree_levels: u32) -> OctreeTileId {
-        if subtree_levels == 0 {
-            return self;
-        }
-        let subtree_level = (self.level / subtree_levels) * subtree_levels;
-        let d = self.level - subtree_level;
-        OctreeTileId::new(subtree_level, self.x >> d, self.y >> d, self.z >> d)
-    }
-}
-
-impl SubtreeTileId for OctreeTileId {
-    const SCHEME: SubdivisionScheme = SubdivisionScheme::Octree;
-
-    fn relative_position(self, subtree_id: Self) -> (u32, u64) {
-        let relative = self.relative_to(subtree_id);
-        (relative.level, relative.morton_index())
-    }
-}
-
 impl SubdivisionScheme {
     pub(crate) fn child_count(self) -> u64 {
         match self {
@@ -532,9 +454,6 @@ impl SubtreeAvailability {
     }
 }
 
-#[cfg(test)]
-mod tests;
-
 /// 2-D Morton index for `(x, y)`: x-bits in odd positions, y-bits in even.
 /// Both `x` and `y` must fit in 16 bits.
 fn morton_2d(x: u32, y: u32) -> u32 {
@@ -562,12 +481,6 @@ pub(crate) fn rank_before(data: &[u8], bit_pos: u32) -> u32 {
     full + partial
 }
 
-#[cfg(test)]
-mod quadtree_availability_tests;
-
-#[cfg(test)]
-mod octree_availability_tests;
-
 /// A rectangular range of tile coordinates at a given zoom level.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QuadtreeTileRectangularRange {
@@ -588,3 +501,493 @@ pub use octree::*;
 
 mod quadtree;
 pub use quadtree::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn quad_subtree(all_avail: bool) -> SubtreeAvailability {
+        if all_avail {
+            SubtreeAvailability::all_available(SubdivisionScheme::Quadtree, 2)
+        } else {
+            SubtreeAvailability::all_unavailable(SubdivisionScheme::Quadtree, 2)
+        }
+    }
+
+    #[test]
+    fn zero_subtree_levels_do_not_divide_or_shift_panic() {
+        let id = QuadtreeTileId::new(4, 3, 2);
+        assert_eq!(id.subtree_root(0), id);
+        let subtree = SubtreeAvailability::all_unavailable(SubdivisionScheme::Quadtree, u32::MAX);
+        assert!(!subtree.is_tile_available_at(0, 0));
+        assert!(!subtree.is_child_subtree_available_at(0));
+    }
+
+    #[test]
+    fn constant_all_available() {
+        let sa = quad_subtree(true);
+        // Root
+        assert!(sa.is_tile_available_at(0, 0));
+        // All 4 level-1 tiles
+        for m in 0..4 {
+            assert!(sa.is_tile_available_at(1, m));
+        }
+    }
+
+    #[test]
+    fn constant_all_unavailable() {
+        let sa = quad_subtree(false);
+        assert!(!sa.is_tile_available_at(0, 0));
+        for m in 0..4 {
+            assert!(!sa.is_tile_available_at(1, m));
+        }
+    }
+
+    #[test]
+    fn set_tile_available_expands_constant() {
+        let mut sa = quad_subtree(false);
+        // Mark only the root available.
+        sa.set_tile_available_at(0, 0, true);
+        assert!(sa.is_tile_available_at(0, 0));
+        assert!(!sa.is_tile_available_at(1, 0));
+    }
+
+    #[test]
+    fn set_and_query_individual_tiles() {
+        let mut sa = quad_subtree(false);
+        sa.set_tile_available_at(0, 0, true);
+        sa.set_tile_available_at(1, 2, true); // bottom-left level-1 child
+        assert!(sa.is_tile_available_at(0, 0));
+        assert!(!sa.is_tile_available_at(1, 0));
+        assert!(!sa.is_tile_available_at(1, 1));
+        assert!(sa.is_tile_available_at(1, 2));
+        assert!(!sa.is_tile_available_at(1, 3));
+    }
+
+    #[test]
+    fn child_subtree_initially_unavailable() {
+        let sa = quad_subtree(true);
+        // child_subtree_availability defaults to Constant(false)
+        assert!(!sa.is_child_subtree_available_at(0));
+    }
+
+    #[test]
+    fn set_child_subtree_available() {
+        let mut sa = quad_subtree(true);
+        sa.set_child_subtree_available(3, true);
+        assert!(!sa.is_child_subtree_available_at(0));
+        assert!(sa.is_child_subtree_available_at(3));
+    }
+
+    #[test]
+    fn is_tile_available_via_quad_ids() {
+        let mut sa = SubtreeAvailability::all_unavailable(SubdivisionScheme::Quadtree, 2);
+        let root = QuadtreeTileId::new(0, 0, 0);
+        let child = QuadtreeTileId::new(1, 1, 0); // Morton index = 1
+        sa.set_tile_available(root, child, true);
+        assert!(sa.is_tile_available(root, child));
+        assert!(!sa.is_tile_available(root, QuadtreeTileId::new(1, 0, 0)));
+    }
+
+    #[test]
+    fn octree_all_available() {
+        let sa = SubtreeAvailability::all_available(SubdivisionScheme::Octree, 1);
+        assert!(sa.is_tile_available_at(0, 0));
+        for m in 0..8 {
+            assert!(sa.is_tile_available_at(1, m));
+        }
+    }
+
+    #[test]
+    fn new_requires_nonempty_content() {
+        assert!(
+            SubtreeAvailability::new(
+                SubdivisionScheme::Quadtree,
+                2,
+                AvailabilityView::Constant(true),
+                AvailabilityView::Constant(false),
+                vec![],
+            )
+            .is_none()
+        );
+    }
+
+    mod quadtree {
+        use super::*;
+
+        fn root_subtree_all_tiles_no_children(levels: u32) -> SubtreeAvailability {
+            SubtreeAvailability::new(
+                SubdivisionScheme::Quadtree,
+                levels,
+                AvailabilityView::Constant(true),
+                AvailabilityView::Constant(false),
+                vec![AvailabilityView::Constant(false)],
+            )
+            .unwrap()
+        }
+
+        #[test]
+        fn empty_root_level_0_is_implicitly_available() {
+            let qa = QuadtreeAvailability::new(2, 4);
+            let flags = qa.compute_availability(QuadtreeTileId {
+                level: 0,
+                x: 0,
+                y: 0,
+            });
+            assert!(flags.contains(TileAvailabilityFlags::TILE_AVAILABLE));
+            assert!(flags.contains(TileAvailabilityFlags::SUBTREE_AVAILABLE));
+        }
+
+        #[test]
+        fn empty_tracker_non_root_returns_empty() {
+            let qa = QuadtreeAvailability::new(2, 4);
+            let flags = qa.compute_availability(QuadtreeTileId {
+                level: 1,
+                x: 0,
+                y: 0,
+            });
+            assert!(flags.is_empty());
+        }
+
+        #[test]
+        fn beyond_maximum_level_returns_empty() {
+            let qa = QuadtreeAvailability::new(2, 2);
+            let flags = qa.compute_availability(QuadtreeTileId {
+                level: 3,
+                x: 0,
+                y: 0,
+            });
+            assert!(flags.is_empty());
+        }
+
+        #[test]
+        fn root_subtree_all_tiles_available() {
+            let mut qa = QuadtreeAvailability::new(2, 4);
+            let subtree = root_subtree_all_tiles_no_children(2);
+            assert!(qa.add_subtree(
+                QuadtreeTileId {
+                    level: 0,
+                    x: 0,
+                    y: 0
+                },
+                subtree
+            ));
+
+            // Root tile should be reachable, tile available, subtree loaded.
+            let flags = qa.compute_availability(QuadtreeTileId {
+                level: 0,
+                x: 0,
+                y: 0,
+            });
+            assert!(flags.contains(TileAvailabilityFlags::REACHABLE));
+            assert!(flags.contains(TileAvailabilityFlags::TILE_AVAILABLE));
+            assert!(flags.contains(TileAvailabilityFlags::SUBTREE_AVAILABLE));
+            assert!(flags.contains(TileAvailabilityFlags::SUBTREE_LOADED));
+        }
+
+        #[test]
+        fn tile_within_root_subtree_reachable_and_available() {
+            let mut qa = QuadtreeAvailability::new(2, 4);
+            let subtree = root_subtree_all_tiles_no_children(2);
+            qa.add_subtree(
+                QuadtreeTileId {
+                    level: 0,
+                    x: 0,
+                    y: 0,
+                },
+                subtree,
+            );
+
+            // A 2-level subtree covers relative levels 0 and 1 (levels_left in [0,1]).
+            // Level 2 is the root of a child subtree - NOT within this subtree.
+            for &(level, x, y) in &[(1u32, 0u32, 0u32), (1, 1, 0), (1, 1, 1)] {
+                let flags = qa.compute_availability(QuadtreeTileId { level, x, y });
+                assert!(
+                    flags.contains(TileAvailabilityFlags::REACHABLE),
+                    "level={level} x={x} y={y} should be REACHABLE"
+                );
+                assert!(
+                    flags.contains(TileAvailabilityFlags::TILE_AVAILABLE),
+                    "level={level} x={x} y={y} should be TILE_AVAILABLE"
+                );
+            }
+        }
+
+        #[test]
+        fn child_subtree_root_not_yet_loaded_reports_available_not_loaded() {
+            // 2-level root subtree, child subtrees at level 2 all marked available.
+            let mut qa = QuadtreeAvailability::new(2, 6);
+            let subtree = SubtreeAvailability::new(
+                SubdivisionScheme::Quadtree,
+                2,
+                AvailabilityView::Constant(true),
+                AvailabilityView::Constant(true), // all child subtrees available
+                vec![AvailabilityView::Constant(false)],
+            )
+            .unwrap();
+            qa.add_subtree(
+                QuadtreeTileId {
+                    level: 0,
+                    x: 0,
+                    y: 0,
+                },
+                subtree,
+            );
+
+            // Level 2 is the root of a child subtree; it's available but not loaded.
+            let flags = qa.compute_availability(QuadtreeTileId {
+                level: 2,
+                x: 0,
+                y: 0,
+            });
+            assert!(flags.contains(TileAvailabilityFlags::TILE_AVAILABLE));
+            assert!(flags.contains(TileAvailabilityFlags::SUBTREE_AVAILABLE));
+            // SUBTREE_LOADED should NOT be set - the subtree file wasn't added.
+            assert!(!flags.contains(TileAvailabilityFlags::SUBTREE_LOADED));
+        }
+
+        #[test]
+        fn add_root_twice_returns_false_second_time() {
+            let mut qa = QuadtreeAvailability::new(2, 4);
+            let s1 = root_subtree_all_tiles_no_children(2);
+            let s2 = root_subtree_all_tiles_no_children(2);
+            assert!(qa.add_subtree(
+                QuadtreeTileId {
+                    level: 0,
+                    x: 0,
+                    y: 0
+                },
+                s1
+            ));
+            assert!(!qa.add_subtree(
+                QuadtreeTileId {
+                    level: 0,
+                    x: 0,
+                    y: 0
+                },
+                s2
+            ));
+        }
+
+        #[test]
+        fn bitstream_child_availability_selects_correct_slot() {
+            // 1-level subtree: one root tile, 4 potential child subtrees (at level 1).
+            // Mark only Morton index 0 (x=0, y=0) child subtree as available.
+            let bit_byte: u8 = 0b0000_0001; // only bit 0 set
+            let root_subtree = SubtreeAvailability::new(
+                SubdivisionScheme::Quadtree,
+                1,
+                AvailabilityView::Constant(true),
+                AvailabilityView::Bitstream(vec![bit_byte]),
+                vec![AvailabilityView::Constant(false)],
+            )
+            .unwrap();
+
+            let mut qa = QuadtreeAvailability::new(1, 4);
+            qa.add_subtree(
+                QuadtreeTileId {
+                    level: 0,
+                    x: 0,
+                    y: 0,
+                },
+                root_subtree,
+            );
+
+            // Child subtree at (1,0,0) is available and can be added.
+            let child_subtree = root_subtree_all_tiles_no_children(1);
+            assert!(
+                qa.add_subtree(
+                    QuadtreeTileId {
+                        level: 1,
+                        x: 0,
+                        y: 0
+                    },
+                    child_subtree
+                ),
+                "should successfully add child at morton-0"
+            );
+
+            // Adding at (1,1,0) should fail - not marked available.
+            let child_subtree2 = root_subtree_all_tiles_no_children(1);
+            assert!(
+                !qa.add_subtree(
+                    QuadtreeTileId {
+                        level: 1,
+                        x: 1,
+                        y: 0
+                    },
+                    child_subtree2
+                ),
+                "child at morton-2 not available, add should return false"
+            );
+        }
+
+        #[test]
+        fn flags_bitor_and_contains() {
+            let f = TileAvailabilityFlags::TILE_AVAILABLE | TileAvailabilityFlags::REACHABLE;
+            assert!(f.contains(TileAvailabilityFlags::TILE_AVAILABLE));
+            assert!(f.contains(TileAvailabilityFlags::REACHABLE));
+            assert!(!f.contains(TileAvailabilityFlags::CONTENT_AVAILABLE));
+        }
+
+        #[test]
+        fn flags_default_is_empty() {
+            assert!(TileAvailabilityFlags::default().is_empty());
+        }
+    }
+
+    mod octree {
+        use super::*;
+
+        fn oct_subtree_all_tiles(levels: u32) -> SubtreeAvailability {
+            SubtreeAvailability::new(
+                SubdivisionScheme::Octree,
+                levels,
+                AvailabilityView::Constant(true),
+                AvailabilityView::Constant(false),
+                vec![AvailabilityView::Constant(false)],
+            )
+            .unwrap()
+        }
+
+        fn root() -> OctreeTileId {
+            OctreeTileId {
+                level: 0,
+                x: 0,
+                y: 0,
+                z: 0,
+            }
+        }
+
+        #[test]
+        fn empty_root_implicitly_available() {
+            let oa = OctreeAvailability::new(2, 6);
+            let flags = oa.compute_availability(root());
+            assert!(flags.contains(TileAvailabilityFlags::TILE_AVAILABLE));
+            assert!(flags.contains(TileAvailabilityFlags::SUBTREE_AVAILABLE));
+        }
+
+        #[test]
+        fn empty_non_root_returns_empty() {
+            let oa = OctreeAvailability::new(2, 6);
+            let flags = oa.compute_availability(OctreeTileId {
+                level: 1,
+                x: 0,
+                y: 0,
+                z: 0,
+            });
+            assert!(flags.is_empty());
+        }
+
+        #[test]
+        fn beyond_max_level_returns_empty() {
+            let oa = OctreeAvailability::new(2, 2);
+            let flags = oa.compute_availability(OctreeTileId {
+                level: 3,
+                x: 0,
+                y: 0,
+                z: 0,
+            });
+            assert!(flags.is_empty());
+        }
+
+        #[test]
+        fn root_subtree_tiles_available() {
+            let mut oa = OctreeAvailability::new(2, 6);
+            assert!(oa.add_subtree(root(), oct_subtree_all_tiles(2)));
+
+            let flags = oa.compute_availability(root());
+            assert!(flags.contains(TileAvailabilityFlags::REACHABLE));
+            assert!(flags.contains(TileAvailabilityFlags::TILE_AVAILABLE));
+            assert!(flags.contains(TileAvailabilityFlags::SUBTREE_AVAILABLE));
+            assert!(flags.contains(TileAvailabilityFlags::SUBTREE_LOADED));
+        }
+
+        #[test]
+        fn tiles_within_root_subtree_available() {
+            let mut oa = OctreeAvailability::new(2, 6);
+            oa.add_subtree(root(), oct_subtree_all_tiles(2));
+
+            // Level 1 is within the 2-level subtree (levels_left == 1 < 2).
+            for (x, y, z) in [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 1)] {
+                let tid = OctreeTileId { level: 1, x, y, z };
+                let flags = oa.compute_availability(tid);
+                assert!(
+                    flags.contains(TileAvailabilityFlags::TILE_AVAILABLE),
+                    "{tid:?}"
+                );
+                assert!(flags.contains(TileAvailabilityFlags::REACHABLE), "{tid:?}");
+            }
+        }
+
+        #[test]
+        fn add_root_twice_fails() {
+            let mut oa = OctreeAvailability::new(2, 6);
+            assert!(oa.add_subtree(root(), oct_subtree_all_tiles(2)));
+            assert!(!oa.add_subtree(root(), oct_subtree_all_tiles(2)));
+        }
+
+        #[test]
+        fn child_subtree_available_not_loaded() {
+            let mut oa = OctreeAvailability::new(2, 6);
+            let subtree = SubtreeAvailability::new(
+                SubdivisionScheme::Octree,
+                2,
+                AvailabilityView::Constant(true),
+                AvailabilityView::Constant(true), // all 64 child subtrees available
+                vec![AvailabilityView::Constant(false)],
+            )
+            .unwrap();
+            oa.add_subtree(root(), subtree);
+
+            // Level 2 is the root of the first child subtree - available, not loaded.
+            let flags = oa.compute_availability(OctreeTileId {
+                level: 2,
+                x: 0,
+                y: 0,
+                z: 0,
+            });
+            assert!(flags.contains(TileAvailabilityFlags::TILE_AVAILABLE));
+            assert!(flags.contains(TileAvailabilityFlags::SUBTREE_AVAILABLE));
+            assert!(!flags.contains(TileAvailabilityFlags::SUBTREE_LOADED));
+        }
+
+        #[test]
+        fn bitstream_child_selects_correct_slot() {
+            // 1-level octree subtree: 8 potential child subtrees.
+            // Mark only Morton index 0 (x=0,y=0,z=0) as available.
+            let root_subtree = SubtreeAvailability::new(
+                SubdivisionScheme::Octree,
+                1,
+                AvailabilityView::Constant(true),
+                AvailabilityView::Bitstream(vec![0b0000_0001]), // only bit 0 set
+                vec![AvailabilityView::Constant(false)],
+            )
+            .unwrap();
+
+            let mut oa = OctreeAvailability::new(1, 4);
+            oa.add_subtree(root(), root_subtree);
+
+            // Adding at (1,0,0,0) - morton 0 - should succeed.
+            assert!(oa.add_subtree(
+                OctreeTileId {
+                    level: 1,
+                    x: 0,
+                    y: 0,
+                    z: 0
+                },
+                oct_subtree_all_tiles(1),
+            ));
+
+            // Adding at (1,1,0,0) - morton 1 - should fail (not in bitstream).
+            assert!(!oa.add_subtree(
+                OctreeTileId {
+                    level: 1,
+                    x: 1,
+                    y: 0,
+                    z: 0
+                },
+                oct_subtree_all_tiles(1),
+            ));
+        }
+    }
+}

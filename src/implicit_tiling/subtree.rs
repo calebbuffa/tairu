@@ -133,11 +133,9 @@ impl SubtreeAvailability {
         scheme: SubdivisionScheme,
         subtree_levels: u32,
     ) -> Result<Self, crate::Error> {
-        let (json_bytes, inline_binary) =
-            split_envelope(data).map_err(|error| crate::Error::subtree(error.to_string()))?;
-        let json: Subtree = serde_json::from_slice(json_bytes)
-            .map_err(SubtreeParseError::Json)
-            .map_err(|error| crate::Error::subtree(error.to_string()))?;
+        let (json_bytes, inline_binary) = split_envelope(data).map_err(crate::Error::from)?;
+        let json: Subtree =
+            serde_json::from_slice(json_bytes).map_err(crate::Error::SubtreeJson)?;
         build_availability(
             &json,
             inline_binary,
@@ -145,7 +143,28 @@ impl SubtreeAvailability {
             scheme,
             subtree_levels,
         )
-        .map_err(|error| crate::Error::subtree(error.to_string()))
+        .map_err(crate::Error::from)
+    }
+}
+
+impl From<SubtreeParseError> for crate::Error {
+    fn from(error: SubtreeParseError) -> Self {
+        match error {
+            SubtreeParseError::TooShort => Self::SubtreeTruncated,
+            SubtreeParseError::BadVersion(version) => Self::SubtreeUnsupportedVersion(version),
+            SubtreeParseError::Json(source) => Self::SubtreeJson(source),
+            SubtreeParseError::InvalidBufferView { index } => {
+                Self::SubtreeInvalidBufferView { index }
+            }
+            SubtreeParseError::BufferOutOfRange => Self::SubtreeBufferOutOfRange,
+            SubtreeParseError::MissingExternalBuffer { uri } => {
+                Self::SubtreeMissingExternalBuffer { uri }
+            }
+            SubtreeParseError::InvalidBufferIndex { index } => {
+                Self::SubtreeInvalidBufferIndex { index }
+            }
+            SubtreeParseError::InvalidLength => Self::SubtreeInvalidLength,
+        }
     }
 }
 
@@ -372,7 +391,7 @@ mod tests {
         data.truncate(10); // cut short
         assert!(matches!(
             SubtreeAvailability::from_bytes(&data, SubdivisionScheme::Quadtree, 2),
-            Err(crate::Error::Subtree { .. })
+            Err(crate::Error::SubtreeTruncated)
         ));
     }
 
@@ -384,7 +403,7 @@ mod tests {
         data[4..8].copy_from_slice(&2u32.to_le_bytes());
         assert!(matches!(
             SubtreeAvailability::from_bytes(&data, SubdivisionScheme::Quadtree, 2),
-            Err(crate::Error::Subtree { .. })
+            Err(crate::Error::SubtreeUnsupportedVersion(2))
         ));
     }
 
@@ -399,7 +418,7 @@ mod tests {
         data.extend_from_slice(&json);
         assert!(matches!(
             SubtreeAvailability::from_bytes(&data, SubdivisionScheme::Quadtree, 2),
-            Err(crate::Error::Subtree { .. })
+            Err(crate::Error::SubtreeInvalidLength)
         ));
     }
 }

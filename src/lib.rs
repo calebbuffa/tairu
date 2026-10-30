@@ -19,8 +19,8 @@
 //!
 //! The crate is the 3D Tiles specification only. It parses and serializes
 //! caller-supplied data without acquiring resources or owning threads.
-//! Resource reading, hierarchy traversal, and navigation are provided by
-//! the `hiera` crate's `tairu` feature.
+//! Implicit-tiling coordinates, availability, templates, and subtree encoding
+//! stay here; fetching resources and traversing live sources are not spec APIs.
 //!
 //! ```
 //! use tairu::from_str;
@@ -51,7 +51,7 @@ mod extension;
 mod generated;
 mod implicit_tiling;
 mod impls;
-mod io;
+mod serialization;
 mod tile;
 mod uri;
 mod validation;
@@ -63,7 +63,7 @@ pub use implicit_tiling::{
     AvailabilityView, OctreeAvailability, OctreeTileId, QuadtreeAvailability, QuadtreeTileId,
     SubtreeAvailability, SubtreeTileId, TileAvailabilityFlags,
 };
-pub use io::{
+pub use serialization::{
     SubtreeWriter, WriteOptions, from_reader, from_reader_with_diagnostics, from_slice,
     from_slice_with_diagnostics, from_str, from_str_with_diagnostics, parse_tileset,
     parse_tileset_with_diagnostics, write_schema, write_tileset,

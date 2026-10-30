@@ -25,12 +25,9 @@ pub trait HasExtensions {
     /// Deserialize extension payload by type.
     fn extension<E: Extension + DeserializeOwned>(&self) -> Result<Option<E>, Error> {
         match self.extensions().get(E::NAME) {
-            Some(value) => E::deserialize(value).map(Some).map_err(|error| {
-                Error::parse(
-                    "<extension>",
-                    format!("failed to decode extension {}: {}", E::NAME, error),
-                )
-            }),
+            Some(value) => E::deserialize(value)
+                .map(Some)
+                .map_err(|source| Error::json(format!("<extension {}>", E::NAME), source)),
             None => Ok(None),
         }
     }
@@ -42,12 +39,8 @@ pub trait HasExtensions {
 
     /// Encode and insert extension payload by type.
     fn set_extension<E: Extension + Serialize>(&mut self, ext: E) -> Result<(), Error> {
-        let value = serde_json::to_value(ext).map_err(|error| {
-            Error::parse(
-                "<extension>",
-                format!("failed to encode extension {}: {}", E::NAME, error),
-            )
-        })?;
+        let value = serde_json::to_value(ext)
+            .map_err(|source| Error::json(format!("<extension {}>", E::NAME), source))?;
         self.extensions_mut().insert(E::NAME.to_string(), value);
         Ok(())
     }
@@ -115,7 +108,7 @@ mod tests {
             serde_json::json!({"wrong": true}),
         );
         let err = tile.extension::<TestExt>().expect_err("decode should fail");
-        assert!(matches!(err, Error::Parse { .. }));
+        assert!(matches!(err, Error::Json { .. }));
     }
 
     #[test]
